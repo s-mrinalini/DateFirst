@@ -511,6 +511,7 @@ async def create_date_post(data: DatePostCreate, current_user: dict = Depends(ge
     }
     
     await db.date_posts.insert_one(post)
+    post.pop('_id', None)  # Remove MongoDB ObjectId before returning
     return post
 
 @api_router.get("/dates")

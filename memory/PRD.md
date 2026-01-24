@@ -1,155 +1,148 @@
-# DateFirst - Product Requirements Document
+# DateFirst v2 - Product Requirements Document
 
 ## Overview
-DateFirst is a dating app where users post date ideas and others apply to join them. Users browse date plans, not profiles - focusing on shared experiences rather than appearances.
+DateFirst is a dating app where users browse **date ideas**, not profiles. Before matching, users only see a person's first name, photo, and their "First Date Idea." Full profiles are revealed only after mutual matching.
 
 ## Core Philosophy
-"The best dates start with a great idea, not a swipe."
+"Browse ideas, not just faces. Match on experiences that excite you both."
 
-## User Personas
+## User Flow
 
-### 1. Date Creator (Host)
-- Wants to plan meaningful experiences
-- Values quality over quantity in matches
-- Prefers to evaluate applicants based on shared interests
+### Pre-Match Experience
+Users see limited information:
+- First name
+- Main photo
+- First Date Idea (title, description, tags, city)
+- General vibes/preferences
 
-### 2. Date Applicant (Guest)
-- Discovers dates that genuinely interest them
-- Applies to experiences that match their preferences
-- Can see what they're signing up for before matching
+**NOT visible pre-match:**
+- Date of birth / age (stored but hidden)
+- Full bio
+- Height
+- Extra details
 
-### 3. Premium User
-- Wants deeper insights into applicants
-- Values compatibility scoring and detailed profiles
-- Willing to pay for enhanced decision-making
+### Post-Match Experience
+Upon mutual like:
+- Full profile unlocked
+- Private 1:1 chat opens
+- "Plan the date" panel available
 
-## Core Requirements (Static)
+## Core Requirements
 
-### Authentication & Profiles
-- [x] Email/password JWT authentication
-- [x] User profile with: name, age, gender, city, bio, photo
-- [x] Premium profile fields: extra photos, job title, interests, intent
-- [x] Secure session management
+### 1. Authentication
+- [x] Email/password signup/login
+- [x] JWT session management
+- [x] Redirect to onboarding for new users
 
-### Date Posts
-- [x] Create with: title, description, location, date/time, who pays, tags
-- [x] Status flow: OPEN → SELECTED → COMPLETED/CANCELLED
-- [x] Edit/delete own posts
-- [x] Max applicants limit
+### 2. Onboarding Wizard (8 Steps)
+- [x] Step 1: Name + Main Photo URL
+- [x] Step 2: City + Distance Preference (1-100 miles)
+- [x] Step 3: Date of Birth
+- [x] Step 4: Gender + Interested In (Men/Women/Both)
+- [x] Step 5: Height (optional)
+- [x] Step 6: Bio (optional, hidden pre-match)
+- [x] Step 7: Date Preferences (multi-select tags)
+- [x] Step 8: First Date Idea (REQUIRED - title, description, tags, city)
 
-### Browse & Discovery
-- [x] Feed of date posts (not profiles)
-- [x] Filters: city, tags, time, who pays
-- [x] Search by keyword
-- [x] Sort: newest, soonest, most popular
+### 3. Navigation (4 Tabs)
+- [x] **Discover**: Swipe through date invites
+- [x] **Vibes**: Users who liked you
+- [x] **Plans**: Matches and conversations
+- [x] **Profile**: View/edit your profile
 
-### Application System
-- [x] Apply with message (can't apply to own)
-- [x] Withdraw pending applications
-- [x] Rate limiting (10/day)
-- [x] Profanity filter
+### 4. Discover Feed
+- [x] Card-based UI (photo + name + date idea)
+- [x] Like (heart) and Pass (X) actions
+- [x] Quick tag filters (horizontal chips)
+- [x] Filter drawer with:
+  - Gender preference
+  - Distance slider
+  - Sort by (For You / New)
 
-### Matching
-- [x] Host views applicant list
-- [x] Accept one applicant (declines others)
-- [x] Creates private chat on acceptance
+### 5. Matching System
+- [x] Like action creates a "like" record
+- [x] Mutual likes create a "match"
+- [x] Match triggers chat thread creation
+- [x] Notification on match
 
-### Chat
+### 6. Chat
 - [x] Private 1:1 messaging
-- [x] Date confirmation panel
-- [x] Block/report from chat
+- [x] "Matched on" banner showing the date idea
+- [x] "Plan the date" collapsible panel:
+  - Proposed date/time
+  - Meeting location
+  - Who pays (I pay / Split / They pay / Decide later)
+  - Confirm button
 
-### Premium Features
-- [x] Full applicant details (job, interests, intent)
-- [x] Compatibility scoring
-- [x] Premium badge display
-- [x] Placeholder payment flow
-
-### Safety & Trust
-- [x] Block users (hides content both ways)
-- [x] Report users/posts
-- [x] Profanity filter
-- [x] Rate limiting
-
-## What's Been Implemented
-
-### January 24, 2025
-- Full MVP implementation complete
-- Backend: FastAPI with MongoDB
-- Frontend: React with Tailwind CSS, Shadcn/UI
-- 10 seeded users, 20 date posts, 2 chat threads
-- All core features working
-
-### Key Features Delivered
-1. Authentication (login/signup/logout)
-2. Profile management (view/edit)
-3. Date post CRUD with status management
-4. Browse feed with filters and search
-5. Like/unlike dates
-6. Apply/withdraw applications
-7. Accept applicant (creates chat)
-8. Private messaging
-9. Premium upgrade (MOCKED - no real payment)
-10. Block/report functionality
-11. Settings page with blocked users management
-
-## Prioritized Backlog
-
-### P0 (Critical) - Done
-- [x] Authentication
-- [x] Create/browse dates
-- [x] Apply/accept flow
-- [x] Chat functionality
-
-### P1 (Important) - Done
-- [x] Premium gating
-- [x] Block/report
-- [x] Profile editing
-- [x] Filters and search
-
-### P2 (Nice to Have) - Future
-- [ ] Real payment integration (Stripe)
-- [ ] WebSocket real-time chat
-- [ ] Push notifications
-- [ ] Photo upload (currently URL-based)
-- [ ] Email verification
-- [ ] Password reset
-- [ ] Google OAuth
-- [ ] Admin dashboard for moderation
-- [ ] Read receipts in chat
-- [ ] Advanced matching algorithm
+### 7. Safety Features
+- [x] Block users (removes from all views)
+- [x] Report users
+- [x] Unblock from settings
 
 ## Technical Architecture
 
 ### Backend (FastAPI + MongoDB)
-- `/api/auth/*` - Authentication endpoints
-- `/api/profile` - Profile management
-- `/api/dates` - Date post CRUD
-- `/api/dates/{id}/apply` - Application system
-- `/api/applications/{id}/accept` - Accept applicant
-- `/api/chat/*` - Messaging system
-- `/api/block`, `/api/report` - Safety features
-- `/api/upgrade` - Premium toggle (mocked)
+- `/api/auth/*` - Authentication
+- `/api/profile/setup` - Onboarding
+- `/api/profile` - Profile updates
+- `/api/discover` - Discovery feed with filters
+- `/api/like/{user_id}` - Like/match system
+- `/api/vibes` - Users who liked you
+- `/api/plans` - Matches list
+- `/api/chat/*` - Messaging
+
+### Privacy Enforcement (Server-Side)
+- `get_public_profile()` - Returns only name, photo, city, date idea
+- `get_full_profile()` - Returns all fields (post-match only)
+- `are_matched()` helper checks match status before revealing details
 
 ### Frontend (React + Tailwind)
-- Single-page application
-- JWT stored in localStorage
+- Mobile-first design
+- 4-tab bottom navigation
+- Swipe-style cards on Discover
 - Polling-based chat (5s interval)
-- Responsive mobile-first design
-- Shadcn/UI component library
 
-### Database Collections
-- users, profiles
-- date_posts, applications, likes
-- chat_threads, chat_messages
-- blocks, reports
+### Data Model
+- User (auth info)
+- Profile (with first_date_idea embedded)
+- Like (liker_id, liked_id)
+- Match (user1_id, user2_id)
+- ChatThread (with date_plan embedded)
+- ChatMessage
+- Block, Report
+
+## What's Been Implemented
+
+### January 24, 2025
+- Complete v2 rewrite from scratch
+- New privacy-first concept
+- 8-step onboarding wizard
+- Tinder-like swipe cards
+- Filter drawer
+- "Plan the date" chat feature
+- 12 seeded users, 3 matches
 
 ## Demo Accounts
-- emma@example.com / password123 (Standard)
-- liam@example.com / password123 (Premium)
+- emma@example.com / password123 (matched with James)
+- james@example.com / password123 (matched with Emma)
 - All demo passwords: password123
 
-## Notes
-- Premium payment is MOCKED (no real charges)
-- Chat uses polling, not WebSockets
-- Photos are URL-based, no upload functionality
+## Prioritized Backlog
+
+### P0 (Done)
+- [x] Core auth + onboarding
+- [x] Discovery with filters
+- [x] Like/match system
+- [x] Chat with date planning
+
+### P1 (Future)
+- [ ] Photo upload (currently URL-based)
+- [ ] Real-time WebSocket chat
+- [ ] Push notifications
+- [ ] Geolocation for distance
+
+### P2 (Nice to Have)
+- [ ] Video intro clips
+- [ ] Voice messages
+- [ ] "Super like" feature
+- [ ] Date idea templates

@@ -358,7 +358,7 @@ export default function OnboardingPage() {
               <div>
                 <Label>Height</Label>
                 <Input
-                  placeholder='e.g., 5\'8" or 173cm'
+                  placeholder="e.g., 5'8 or 173cm"
                   value={formData.height}
                   onChange={(e) => updateField('height', e.target.value)}
                   className="mt-1.5 rounded-xl h-12"

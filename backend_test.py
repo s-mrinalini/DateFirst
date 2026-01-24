@@ -6,7 +6,7 @@ import json
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional
 
-class DateFirstAPITester:
+class DateFirstV2APITester:
     def __init__(self, base_url="https://dateplan.preview.emergentagent.com/api"):
         self.base_url = base_url
         self.token = None
@@ -75,7 +75,7 @@ class DateFirstAPITester:
         """Test database seeding"""
         success, response = self.make_request('POST', 'seed')
         self.log_result("Database Seeding", success, 
-                       f"Users: {response.get('users', 0)}, Posts: {response.get('date_posts', 0)}" if success else str(response))
+                       f"Users: {response.get('users', 0)}, Matches: {response.get('matches', 0)}" if success else str(response))
         return success
 
     def test_login(self, email: str, password: str):
@@ -92,9 +92,9 @@ class DateFirstAPITester:
                        f"User: {response.get('user', {}).get('first_name', 'unknown')}" if success else str(response))
         return success
 
-    def test_signup(self, email: str, password: str, first_name: str):
+    def test_signup(self, email: str, password: str):
         """Test user signup"""
-        data = {"email": email, "password": password, "first_name": first_name}
+        data = {"email": email, "password": password}
         success, response = self.make_request('POST', 'auth/signup', data)
         
         if success and 'token' in response:
@@ -113,132 +113,117 @@ class DateFirstAPITester:
                        f"User: {response.get('user', {}).get('first_name', 'unknown')}" if success else str(response))
         return success
 
-    def test_get_dates(self):
-        """Test fetching date posts"""
-        success, response = self.make_request('GET', 'dates')
-        posts_count = len(response.get('posts', [])) if success else 0
+    def test_discover_invites(self):
+        """Test fetching discovery feed"""
+        success, response = self.make_request('GET', 'discover')
+        invites_count = len(response.get('invites', [])) if success else 0
         total = response.get('total', 0) if success else 0
         
-        self.log_result("Get Date Posts", success, 
-                       f"Found {posts_count} posts, Total: {total}" if success else str(response))
-        return success, response.get('posts', []) if success else []
+        self.log_result("Get Discovery Feed", success, 
+                       f"Found {invites_count} invites, Total: {total}" if success else str(response))
+        return success, response.get('invites', []) if success else []
 
-    def test_create_date_post(self):
-        """Test creating a date post"""
-        future_date = (datetime.now() + timedelta(days=7)).isoformat()
-        data = {
-            "title": "Test Coffee Date",
-            "description": "Let's grab coffee and chat about life!",
-            "city": "Austin",
-            "place_name": "Local Coffee Shop",
-            "date_time": future_date,
-            "duration": "2 hours",
-            "who_pays": "split",
-            "tags": ["coffee", "casual"],
-            "age_range_min": 25,
-            "age_range_max": 35,
-            "max_applicants": 5
-        }
+    def test_discover_with_filters(self):
+        """Test discovery with filters"""
+        params = "?interested_in=male&max_distance=25&tags=coffee&sort_by=new"
+        success, response = self.make_request('GET', f'discover{params}')
+        invites_count = len(response.get('invites', [])) if success else 0
         
-        success, response = self.make_request('POST', 'dates', data, 201)
-        post_id = response.get('id') if success else None
-        
-        self.log_result("Create Date Post", success, 
-                       f"Post ID: {post_id}" if success else str(response))
-        return success, post_id
-
-    def test_get_date_details(self, post_id: str):
-        """Test getting date post details"""
-        success, response = self.make_request('GET', f'dates/{post_id}')
-        self.log_result("Get Date Details", success, 
-                       f"Title: {response.get('title', 'unknown')}" if success else str(response))
+        self.log_result("Discovery with Filters", success, 
+                       f"Found {invites_count} filtered invites" if success else str(response))
         return success
 
-    def test_like_date(self, post_id: str):
-        """Test liking a date post"""
-        success, response = self.make_request('POST', f'dates/{post_id}/like')
-        self.log_result("Like Date Post", success, 
+    def test_like_user(self, user_id: str):
+        """Test liking a user"""
+        success, response = self.make_request('POST', f'like/{user_id}')
+        is_match = response.get('is_match', False) if success else False
+        
+        self.log_result("Like User", success, 
+                       f"Match: {is_match}, Message: {response.get('message', '')}" if success else str(response))
+        return success, is_match
+
+    def test_unlike_user(self, user_id: str):
+        """Test unliking a user (pass)"""
+        success, response = self.make_request('DELETE', f'like/{user_id}')
+        self.log_result("Unlike User", success, 
                        response.get('message', 'Success') if success else str(response))
         return success
 
-    def test_apply_to_date(self, post_id: str):
-        """Test applying to a date"""
-        data = {
-            "message": "I'd love to join this date! Sounds like a great time."
-        }
-        success, response = self.make_request('POST', f'dates/{post_id}/apply', data)
-        application_id = response.get('application_id') if success else None
+    def test_get_vibes(self):
+        """Test getting users who liked me"""
+        success, response = self.make_request('GET', 'vibes')
+        vibes_count = len(response.get('vibes', [])) if success else 0
         
-        self.log_result("Apply to Date", success, 
-                       f"Application ID: {application_id}" if success else str(response))
-        return success, application_id
+        self.log_result("Get Vibes", success, 
+                       f"Found {vibes_count} users who liked you" if success else str(response))
+        return success, response.get('vibes', []) if success else []
 
-    def test_get_applications(self, post_id: str):
-        """Test getting applications for a date post"""
-        success, response = self.make_request('GET', f'dates/{post_id}/applications')
-        apps_count = len(response) if success and isinstance(response, list) else 0
+    def test_get_plans(self):
+        """Test getting matches/plans"""
+        success, response = self.make_request('GET', 'plans')
+        plans_count = len(response.get('plans', [])) if success else 0
         
-        self.log_result("Get Applications", success, 
-                       f"Found {apps_count} applications" if success else str(response))
-        return success, response if success else []
+        self.log_result("Get Plans", success, 
+                       f"Found {plans_count} matches/plans" if success else str(response))
+        return success, response.get('plans', []) if success else []
 
-    def test_accept_application(self, application_id: str):
-        """Test accepting an application"""
-        success, response = self.make_request('POST', f'applications/{application_id}/accept')
-        thread_id = response.get('thread_id') if success else None
-        
-        self.log_result("Accept Application", success, 
-                       f"Thread ID: {thread_id}" if success else str(response))
-        return success, thread_id
+    def test_get_chat_thread(self, thread_id: str):
+        """Test getting chat thread details"""
+        success, response = self.make_request('GET', f'chat/{thread_id}')
+        self.log_result("Get Chat Thread", success, 
+                       f"Thread ID: {response.get('thread', {}).get('id', 'unknown')}" if success else str(response))
+        return success
 
-    def test_get_chat_threads(self):
-        """Test getting chat threads"""
-        success, response = self.make_request('GET', 'chat/threads')
-        threads_count = len(response) if success and isinstance(response, list) else 0
+    def test_get_messages(self, thread_id: str):
+        """Test getting chat messages"""
+        success, response = self.make_request('GET', f'chat/{thread_id}/messages')
+        messages_count = len(response.get('messages', [])) if success else 0
         
-        self.log_result("Get Chat Threads", success, 
-                       f"Found {threads_count} threads" if success else str(response))
-        return success, response if success else []
+        self.log_result("Get Chat Messages", success, 
+                       f"Found {messages_count} messages" if success else str(response))
+        return success
 
     def test_send_message(self, thread_id: str):
         """Test sending a chat message"""
         data = {"content": "Hello! Looking forward to our date!"}
-        success, response = self.make_request('POST', f'chat/threads/{thread_id}/messages', data)
+        success, response = self.make_request('POST', f'chat/{thread_id}/messages', data)
         message_id = response.get('id') if success else None
         
         self.log_result("Send Chat Message", success, 
                        f"Message ID: {message_id}" if success else str(response))
         return success
 
-    def test_get_messages(self, thread_id: str):
-        """Test getting chat messages"""
-        success, response = self.make_request('GET', f'chat/threads/{thread_id}/messages')
-        messages_count = len(response) if success and isinstance(response, list) else 0
+    def test_update_date_plan(self, thread_id: str):
+        """Test updating date plan"""
+        data = {
+            "proposed_datetime": "2024-12-25T19:00:00",
+            "proposed_location": "Central Park Coffee",
+            "who_pays": "split"
+        }
+        success, response = self.make_request('PUT', f'chat/{thread_id}/plan', data)
         
-        self.log_result("Get Chat Messages", success, 
-                       f"Found {messages_count} messages" if success else str(response))
+        self.log_result("Update Date Plan", success, 
+                       f"Plan updated" if success else str(response))
+        return success
+
+    def test_get_profile(self, user_id: str):
+        """Test getting user profile"""
+        success, response = self.make_request('GET', f'profile/{user_id}')
+        self.log_result("Get User Profile", success, 
+                       f"Name: {response.get('first_name', 'unknown')}" if success else str(response))
         return success
 
     def test_update_profile(self):
-        """Test updating user profile"""
+        """Test updating own profile"""
         data = {
-            "age": 28,
-            "city": "Austin",
-            "bio": "Love coffee and outdoor adventures!",
-            "interests": ["coffee", "hiking", "photography"]
+            "first_name": "Emma Updated",
+            "bio": "Updated bio for testing",
+            "height": "5'7\""
         }
         success, response = self.make_request('PUT', 'profile', data)
         
         self.log_result("Update Profile", success, 
-                       f"Updated profile" if success else str(response))
-        return success
-
-    def test_premium_upgrade(self):
-        """Test premium upgrade (mocked)"""
-        success, response = self.make_request('POST', 'upgrade')
-        
-        self.log_result("Premium Upgrade", success, 
-                       f"Premium status: {response.get('is_premium', False)}" if success else str(response))
+                       f"Profile updated" if success else str(response))
         return success
 
     def test_block_user(self, user_id: str):
@@ -250,40 +235,39 @@ class DateFirstAPITester:
                        response.get('message', 'Success') if success else str(response))
         return success
 
-    def test_report_content(self, post_id: str):
-        """Test reporting content"""
-        data = {
-            "reported_post_id": post_id,
-            "reason": "inappropriate",
-            "details": "Test report"
-        }
-        success, response = self.make_request('POST', 'report', data)
+    def test_get_blocked_users(self):
+        """Test getting blocked users"""
+        success, response = self.make_request('GET', 'blocked')
+        blocked_count = len(response.get('blocked', [])) if success else 0
         
-        self.log_result("Report Content", success, 
+        self.log_result("Get Blocked Users", success, 
+                       f"Found {blocked_count} blocked users" if success else str(response))
+        return success
+
+    def test_unblock_user(self, user_id: str):
+        """Test unblocking a user"""
+        success, response = self.make_request('DELETE', f'block/{user_id}')
+        
+        self.log_result("Unblock User", success, 
                        response.get('message', 'Success') if success else str(response))
         return success
 
-    def test_my_dates(self):
-        """Test getting user's own date posts"""
-        success, response = self.make_request('GET', 'my-dates')
-        dates_count = len(response) if success and isinstance(response, list) else 0
+    def test_report_user(self, user_id: str):
+        """Test reporting a user"""
+        data = {
+            "reported_user_id": user_id,
+            "reason": "inappropriate",
+            "details": "Test report for API testing"
+        }
+        success, response = self.make_request('POST', 'report', data)
         
-        self.log_result("Get My Dates", success, 
-                       f"Found {dates_count} dates" if success else str(response))
-        return success
-
-    def test_my_applications(self):
-        """Test getting user's applications"""
-        success, response = self.make_request('GET', 'my-applications')
-        apps_count = len(response) if success and isinstance(response, list) else 0
-        
-        self.log_result("Get My Applications", success, 
-                       f"Found {apps_count} applications" if success else str(response))
+        self.log_result("Report User", success, 
+                       response.get('message', 'Success') if success else str(response))
         return success
 
     def run_comprehensive_test(self):
-        """Run comprehensive API test suite"""
-        print("🚀 Starting DateFirst API Test Suite")
+        """Run comprehensive API test suite for DateFirst v2"""
+        print("🚀 Starting DateFirst v2 API Test Suite")
         print("=" * 50)
         
         # Health check
@@ -303,62 +287,68 @@ class DateFirstAPITester:
         # Test user info
         self.test_get_me()
         
-        # Test date posts
-        print("\n📅 Testing Date Posts...")
-        success, posts = self.test_get_dates()
-        if not success or len(posts) == 0:
-            print("❌ No date posts found")
+        # Test discovery
+        print("\n🔍 Testing Discovery...")
+        success, invites = self.test_discover_invites()
+        if not success:
+            print("❌ Discovery failed")
             return False
         
-        # Test creating a date post (skip due to ObjectId serialization issue)
-        print("⚠️  Skipping create date post test due to backend ObjectId issue")
-        new_post_id = posts[0]['id'] if posts else None
+        # Test discovery with filters
+        self.test_discover_with_filters()
         
-        # Test date details with existing post
-        if new_post_id:
-            self.test_get_date_details(new_post_id)
+        # Test liking system
+        print("\n💖 Testing Like System...")
+        if invites and len(invites) > 0:
+            target_user_id = invites[0]['user_id']
+            success, is_match = self.test_like_user(target_user_id)
+            if success:
+                # Test unlike
+                self.test_unlike_user(target_user_id)
         
-        # Test liking
-        self.test_like_date(posts[0]['id'])
+        # Test vibes (who liked me)
+        print("\n✨ Testing Vibes...")
+        success, vibes = self.test_get_vibes()
         
-        # Test profile update
+        # Test plans (matches)
+        print("\n📅 Testing Plans...")
+        success, plans = self.test_get_plans()
+        
+        # Test chat functionality if we have matches
+        if plans and len(plans) > 0:
+            print("\n💬 Testing Chat...")
+            thread_id = plans[0]['thread_id']
+            self.test_get_chat_thread(thread_id)
+            self.test_get_messages(thread_id)
+            self.test_send_message(thread_id)
+            self.test_update_date_plan(thread_id)
+        
+        # Test profile management
         print("\n👤 Testing Profile Management...")
         self.test_update_profile()
         
-        # Test premium features
-        print("\n💎 Testing Premium Features...")
-        self.test_premium_upgrade()
-        
-        # Test with second user for application flow
-        print("\n🔄 Testing Application Flow...")
-        # Login as different user
+        # Test with second user for cross-user functionality
+        print("\n🔄 Testing Cross-User Features...")
+        # Login as James to test from another perspective
         if self.test_login("james@example.com", "password123"):
-            # Apply to an existing post (use first available post)
-            if posts and len(posts) > 0:
-                target_post_id = posts[0]['id']
-                success, app_id = self.test_apply_to_date(target_post_id)
-                if success:
-                    # Switch back to first user to manage applications
-                    if self.test_login("emma@example.com", "password123"):
-                        success, applications = self.test_get_applications(target_post_id)
-                        if success and len(applications) > 0:
-                            # Accept the application
-                            success, thread_id = self.test_accept_application(applications[0]['id'])
-                            if success and thread_id:
-                                # Test chat functionality
-                                print("\n💬 Testing Chat Features...")
-                                self.test_get_chat_threads()
-                                self.test_send_message(thread_id)
-                                self.test_get_messages(thread_id)
+            # Get discovery from James's perspective
+            success, james_invites = self.test_discover_invites()
+            
+            # Test profile viewing
+            if james_invites and len(james_invites) > 0:
+                self.test_get_profile(james_invites[0]['user_id'])
         
-        # Test user management
-        print("\n🛡️ Testing Safety Features...")
-        self.test_my_dates()
-        self.test_my_applications()
-        
-        # Test safety features (using existing post)
-        if posts:
-            self.test_report_content(posts[0]['id'])
+        # Switch back to Emma for safety features
+        if self.test_login("emma@example.com", "password123"):
+            print("\n🛡️ Testing Safety Features...")
+            
+            # Test blocking/reporting with available users
+            if invites and len(invites) > 1:
+                test_user_id = invites[1]['user_id']
+                self.test_block_user(test_user_id)
+                self.test_get_blocked_users()
+                self.test_report_user(test_user_id)
+                self.test_unblock_user(test_user_id)
         
         # Print summary
         print("\n" + "=" * 50)
@@ -376,7 +366,7 @@ class DateFirstAPITester:
 
 def main():
     """Main test execution"""
-    tester = DateFirstAPITester()
+    tester = DateFirstV2APITester()
     
     try:
         success = tester.run_comprehensive_test()

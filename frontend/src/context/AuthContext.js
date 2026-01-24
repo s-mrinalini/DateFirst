@@ -42,27 +42,18 @@ export const AuthProvider = ({ children }) => {
     setToken(newToken);
     setUser(userData);
     
-    // Fetch full profile
     await fetchUser();
-    
     return response.data;
   };
 
-  const signup = async (email, password, firstName) => {
-    const response = await axios.post(`${API}/auth/signup`, {
-      email,
-      password,
-      first_name: firstName,
-    });
+  const signup = async (email, password) => {
+    const response = await axios.post(`${API}/auth/signup`, { email, password });
     const { token: newToken, user: userData } = response.data;
     
     localStorage.setItem('token', newToken);
     axios.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
     setToken(newToken);
     setUser(userData);
-    
-    // Fetch full profile
-    await fetchUser();
     
     return response.data;
   };
@@ -75,18 +66,16 @@ export const AuthProvider = ({ children }) => {
     setProfile(null);
   };
 
-  const updateProfile = async (data) => {
-    const response = await axios.put(`${API}/profile`, data);
-    setProfile(response.data);
-    if (data.first_name) {
-      setUser(prev => ({ ...prev, first_name: data.first_name }));
-    }
+  const setupProfile = async (data) => {
+    const response = await axios.post(`${API}/profile/setup`, data);
+    setProfile(response.data.profile);
+    setUser(prev => ({ ...prev, profile_complete: true }));
     return response.data;
   };
 
-  const upgradeToPremium = async () => {
-    const response = await axios.post(`${API}/upgrade`);
-    setUser(prev => ({ ...prev, is_premium: true }));
+  const updateProfile = async (data) => {
+    const response = await axios.put(`${API}/profile`, data);
+    setProfile(response.data);
     return response.data;
   };
 
@@ -95,12 +84,12 @@ export const AuthProvider = ({ children }) => {
     profile,
     loading,
     isAuthenticated: !!user,
-    isPremium: user?.is_premium || false,
+    profileComplete: user?.profile_complete || false,
     login,
     signup,
     logout,
+    setupProfile,
     updateProfile,
-    upgradeToPremium,
     refreshUser: fetchUser,
   };
 

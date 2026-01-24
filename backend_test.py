@@ -333,21 +333,23 @@ class DateFirstAPITester:
         print("\n🔄 Testing Application Flow...")
         # Login as different user
         if self.test_login("james@example.com", "password123"):
-            # Apply to the first user's post
-            success, app_id = self.test_apply_to_date(new_post_id)
-            if success:
-                # Switch back to first user to manage applications
-                if self.test_login("emma@example.com", "password123"):
-                    success, applications = self.test_get_applications(new_post_id)
-                    if success and len(applications) > 0:
-                        # Accept the application
-                        success, thread_id = self.test_accept_application(applications[0]['id'])
-                        if success and thread_id:
-                            # Test chat functionality
-                            print("\n💬 Testing Chat Features...")
-                            self.test_get_chat_threads()
-                            self.test_send_message(thread_id)
-                            self.test_get_messages(thread_id)
+            # Apply to an existing post (use first available post)
+            if posts and len(posts) > 0:
+                target_post_id = posts[0]['id']
+                success, app_id = self.test_apply_to_date(target_post_id)
+                if success:
+                    # Switch back to first user to manage applications
+                    if self.test_login("emma@example.com", "password123"):
+                        success, applications = self.test_get_applications(target_post_id)
+                        if success and len(applications) > 0:
+                            # Accept the application
+                            success, thread_id = self.test_accept_application(applications[0]['id'])
+                            if success and thread_id:
+                                # Test chat functionality
+                                print("\n💬 Testing Chat Features...")
+                                self.test_get_chat_threads()
+                                self.test_send_message(thread_id)
+                                self.test_get_messages(thread_id)
         
         # Test user management
         print("\n🛡️ Testing Safety Features...")

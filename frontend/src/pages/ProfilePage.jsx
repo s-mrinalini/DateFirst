@@ -1,104 +1,60 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { 
-  User, 
-  MapPin, 
-  Briefcase, 
-  Heart, 
-  Camera,
-  Save,
-  Crown
+  User, MapPin, Calendar, Ruler, Heart, Settings, 
+  ChevronRight, Edit2, Save, Sparkles
 } from 'lucide-react';
 import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
 import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../components/ui/select';
+import { Slider } from '../components/ui/slider';
 import { Avatar, AvatarFallback, AvatarImage } from '../components/ui/avatar';
-import { Checkbox } from '../components/ui/checkbox';
 import { useAuth } from '../context/AuthContext';
-import { Link } from 'react-router-dom';
 
-const GENDER_OPTIONS = [
-  { value: 'male', label: 'Male' },
-  { value: 'female', label: 'Female' },
-  { value: 'non_binary', label: 'Non-binary' },
-  { value: 'other', label: 'Other' },
-];
-
-const INTENT_OPTIONS = [
-  { value: 'relationship', label: 'Looking for a relationship' },
-  { value: 'casual', label: 'Casual dating' },
-  { value: 'new_friends', label: 'Making new friends' },
-];
-
-const INTEREST_OPTIONS = [
-  'coffee', 'dinner', 'hiking', 'museum', 'music', 'wine', 
-  'photography', 'fitness', 'travel', 'books', 'movies', 'cooking',
-  'art', 'outdoors', 'concerts', 'theater', 'sports', 'gaming'
+const DATE_TAGS = [
+  'coffee', 'dinner', 'brunch', 'drinks', 'outdoors', 'hiking',
+  'museum', 'art', 'music', 'movies', 'comedy', 'games',
+  'fitness', 'cooking', 'wine', 'adventure', 'chill', 'active'
 ];
 
 export default function ProfilePage() {
-  const { user, profile, updateProfile, isPremium } = useAuth();
+  const { user, profile, updateProfile, logout } = useAuth();
+  const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(false);
   
   const [formData, setFormData] = useState({
-    first_name: profile?.first_name || user?.first_name || '',
-    age: profile?.age || '',
-    gender: profile?.gender || '',
-    preferred_genders: profile?.preferred_genders || [],
+    first_name: profile?.first_name || '',
+    main_photo: profile?.main_photo || '',
     city: profile?.city || '',
+    distance_preference: profile?.distance_preference || 50,
     bio: profile?.bio || '',
-    profile_photo: profile?.profile_photo || '',
-    job_title: profile?.job_title || '',
-    interests: profile?.interests || [],
-    intent: profile?.intent || '',
+    height: profile?.height || '',
+    interested_in: profile?.interested_in || [],
+    date_preferences: profile?.date_preferences || [],
+    first_date_idea: profile?.first_date_idea || { title: '', description: '', tags: [], city: '' }
   });
 
-  const handleChange = (field) => (e) => {
-    setFormData(prev => ({ ...prev, [field]: e.target.value }));
-  };
-
-  const handleSelectChange = (field) => (value) => {
+  const updateField = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const toggleInterest = (interest) => {
+  const toggleArrayItem = (field, item) => {
     setFormData(prev => ({
       ...prev,
-      interests: prev.interests.includes(interest)
-        ? prev.interests.filter(i => i !== interest)
-        : [...prev.interests, interest]
+      [field]: prev[field].includes(item)
+        ? prev[field].filter(i => i !== item)
+        : [...prev[field], item]
     }));
   };
 
-  const togglePreferredGender = (gender) => {
-    setFormData(prev => ({
-      ...prev,
-      preferred_genders: prev.preferred_genders.includes(gender)
-        ? prev.preferred_genders.filter(g => g !== gender)
-        : [...prev.preferred_genders, gender]
-    }));
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSave = async () => {
     setLoading(true);
-    
     try {
-      const dataToUpdate = {
-        ...formData,
-        age: formData.age ? parseInt(formData.age) : null,
-      };
-      
-      await updateProfile(dataToUpdate);
-      toast.success('Profile updated successfully');
+      await updateProfile(formData);
+      toast.success('Profile updated!');
+      setEditing(false);
     } catch (error) {
       toast.error('Failed to update profile');
     } finally {
@@ -106,242 +62,206 @@ export default function ProfilePage() {
     }
   };
 
+  const calculateAge = (dob) => {
+    if (!dob) return null;
+    const today = new Date();
+    const birth = new Date(dob);
+    let age = today.getFullYear() - birth.getFullYear();
+    const m = today.getMonth() - birth.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+    return age;
+  };
+
+  const age = calculateAge(profile?.date_of_birth);
+
   return (
-    <div className="max-w-2xl mx-auto animate-fadeIn">
+    <div className="min-h-screen bg-[#FDFCF8] p-4 pb-24">
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 
-            className="text-2xl sm:text-3xl font-bold text-[#1C1917]"
-            style={{ fontFamily: 'Syne, sans-serif' }}
-          >
-            Your Profile
-          </h1>
-          <p className="text-[#57534E] mt-1">
-            Complete your profile to get better matches
-          </p>
-        </div>
-        {isPremium && (
-          <div className="premium-badge">
-            <Crown className="w-3 h-3" />
-            Premium
-          </div>
-        )}
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold text-[#1C1917]" style={{ fontFamily: 'Syne, sans-serif' }}>
+          Profile
+        </h1>
+        <Link to="/settings">
+          <Button variant="ghost" size="icon" data-testid="settings-btn">
+            <Settings className="w-5 h-5" />
+          </Button>
+        </Link>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-8">
-        {/* Profile Photo */}
-        <div className="bg-white rounded-2xl border border-stone-200 p-6">
-          <h2 className="font-semibold text-lg text-[#1C1917] mb-4" style={{ fontFamily: 'Syne, sans-serif' }}>
-            Profile Photo
-          </h2>
-          <div className="flex items-center gap-6">
-            <Avatar className="w-24 h-24">
-              <AvatarImage src={formData.profile_photo} />
-              <AvatarFallback className="bg-[#2A9D8F] text-white text-2xl">
-                {formData.first_name?.[0]?.toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
-            <div className="flex-1">
-              <Label className="text-[#57534E]">Photo URL</Label>
-              <Input
-                placeholder="https://example.com/photo.jpg"
-                value={formData.profile_photo}
-                onChange={handleChange('profile_photo')}
-                className="mt-1.5 rounded-xl"
-                data-testid="profile-photo-input"
-              />
-              <p className="text-xs text-[#A8A29E] mt-1">
-                Paste a URL to your profile photo
-              </p>
+      {/* Profile Card */}
+      <div className="bg-white rounded-3xl shadow-lg overflow-hidden mb-6">
+        {/* Photo */}
+        <div className="relative aspect-square max-h-80">
+          <img 
+            src={editing ? formData.main_photo : profile?.main_photo}
+            alt={profile?.first_name}
+            className="w-full h-full object-cover"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+          
+          <div className="absolute bottom-4 left-4 text-white">
+            <h2 className="text-2xl font-bold" style={{ fontFamily: 'Syne, sans-serif' }}>
+              {profile?.first_name}{age && `, ${age}`}
+            </h2>
+            <div className="flex items-center gap-1 text-white/80 mt-1">
+              <MapPin className="w-4 h-4" />
+              <span>{profile?.city}</span>
             </div>
           </div>
+
+          <button
+            onClick={() => setEditing(!editing)}
+            className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/90 flex items-center justify-center text-[#1C1917] hover:bg-white transition-all"
+            data-testid="edit-btn"
+          >
+            <Edit2 className="w-5 h-5" />
+          </button>
         </div>
 
-        {/* Basic Info */}
-        <div className="bg-white rounded-2xl border border-stone-200 p-6">
-          <h2 className="font-semibold text-lg text-[#1C1917] mb-4" style={{ fontFamily: 'Syne, sans-serif' }}>
-            Basic Information
-          </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <Label className="text-[#57534E]">First Name</Label>
-              <Input
-                value={formData.first_name}
-                onChange={handleChange('first_name')}
-                className="mt-1.5 rounded-xl"
-                data-testid="profile-firstname"
-              />
-            </div>
-            <div>
-              <Label className="text-[#57534E]">Age</Label>
-              <Input
-                type="number"
-                min="18"
-                max="100"
-                value={formData.age}
-                onChange={handleChange('age')}
-                className="mt-1.5 rounded-xl"
-                data-testid="profile-age"
-              />
-            </div>
-            <div>
-              <Label className="text-[#57534E]">Gender</Label>
-              <Select value={formData.gender} onValueChange={handleSelectChange('gender')}>
-                <SelectTrigger className="mt-1.5 rounded-xl" data-testid="profile-gender">
-                  <SelectValue placeholder="Select gender" />
-                </SelectTrigger>
-                <SelectContent>
-                  {GENDER_OPTIONS.map(opt => (
-                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-[#57534E]">City</Label>
-              <div className="relative mt-1.5">
-                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#A8A29E]" />
+        {/* Info */}
+        <div className="p-5">
+          {editing ? (
+            <div className="space-y-4">
+              <div>
+                <Label>Name</Label>
                 <Input
-                  placeholder="Your city"
+                  value={formData.first_name}
+                  onChange={(e) => updateField('first_name', e.target.value)}
+                  className="mt-1 rounded-xl"
+                />
+              </div>
+              <div>
+                <Label>Photo URL</Label>
+                <Input
+                  value={formData.main_photo}
+                  onChange={(e) => updateField('main_photo', e.target.value)}
+                  className="mt-1 rounded-xl"
+                />
+              </div>
+              <div>
+                <Label>City</Label>
+                <Input
                   value={formData.city}
-                  onChange={handleChange('city')}
-                  className="pl-10 rounded-xl"
-                  data-testid="profile-city"
+                  onChange={(e) => updateField('city', e.target.value)}
+                  className="mt-1 rounded-xl"
                 />
               </div>
-            </div>
-          </div>
-        </div>
-
-        {/* About */}
-        <div className="bg-white rounded-2xl border border-stone-200 p-6">
-          <h2 className="font-semibold text-lg text-[#1C1917] mb-4" style={{ fontFamily: 'Syne, sans-serif' }}>
-            About You
-          </h2>
-          <div className="space-y-4">
-            <div>
-              <Label className="text-[#57534E]">Bio</Label>
-              <Textarea
-                placeholder="Tell others about yourself..."
-                value={formData.bio}
-                onChange={handleChange('bio')}
-                className="mt-1.5 rounded-xl min-h-[100px]"
-                data-testid="profile-bio"
-              />
-            </div>
-            <div>
-              <Label className="text-[#57534E]">Job Title (Optional)</Label>
-              <div className="relative mt-1.5">
-                <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#A8A29E]" />
+              <div>
+                <Label>Distance ({formData.distance_preference} mi)</Label>
+                <Slider
+                  value={[formData.distance_preference]}
+                  onValueChange={(v) => updateField('distance_preference', v[0])}
+                  min={1}
+                  max={100}
+                  className="mt-2"
+                />
+              </div>
+              <div>
+                <Label>Bio (shown after match)</Label>
+                <Textarea
+                  value={formData.bio}
+                  onChange={(e) => updateField('bio', e.target.value)}
+                  className="mt-1 rounded-xl"
+                  maxLength={300}
+                />
+              </div>
+              <div>
+                <Label>Height</Label>
                 <Input
-                  placeholder="What do you do?"
-                  value={formData.job_title}
-                  onChange={handleChange('job_title')}
-                  className="pl-10 rounded-xl"
-                  data-testid="profile-job"
+                  value={formData.height}
+                  onChange={(e) => updateField('height', e.target.value)}
+                  className="mt-1 rounded-xl"
                 />
               </div>
-            </div>
-            <div>
-              <Label className="text-[#57534E]">What are you looking for?</Label>
-              <Select value={formData.intent} onValueChange={handleSelectChange('intent')}>
-                <SelectTrigger className="mt-1.5 rounded-xl" data-testid="profile-intent">
-                  <SelectValue placeholder="Select intent" />
-                </SelectTrigger>
-                <SelectContent>
-                  {INTENT_OPTIONS.map(opt => (
-                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </div>
 
-        {/* Preferences */}
-        <div className="bg-white rounded-2xl border border-stone-200 p-6">
-          <h2 className="font-semibold text-lg text-[#1C1917] mb-4" style={{ fontFamily: 'Syne, sans-serif' }}>
-            Preferences
-          </h2>
-          <div>
-            <Label className="text-[#57534E] mb-3 block">Interested in dating</Label>
-            <div className="flex flex-wrap gap-3">
-              {['male', 'female', 'non_binary'].map(gender => (
-                <label 
-                  key={gender}
-                  className="flex items-center gap-2 cursor-pointer"
+              <div className="flex gap-3 pt-4">
+                <Button
+                  variant="outline"
+                  onClick={() => setEditing(false)}
+                  className="flex-1 rounded-full"
                 >
-                  <Checkbox
-                    checked={formData.preferred_genders.includes(gender)}
-                    onCheckedChange={() => togglePreferredGender(gender)}
-                    data-testid={`pref-gender-${gender}`}
-                  />
-                  <span className="text-[#1C1917] capitalize">
-                    {gender.replace('_', '-')}
-                  </span>
-                </label>
-              ))}
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleSave}
+                  disabled={loading}
+                  className="flex-1 rounded-full bg-[#E76F51] hover:bg-[#D65D40]"
+                  data-testid="save-btn"
+                >
+                  {loading ? 'Saving...' : 'Save'}
+                </Button>
+              </div>
             </div>
-          </div>
+          ) : (
+            <>
+              {profile?.bio && (
+                <p className="text-[#57534E] mb-4">{profile.bio}</p>
+              )}
+              
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                {profile?.height && (
+                  <div className="flex items-center gap-2 text-[#57534E]">
+                    <Ruler className="w-4 h-4 text-[#A8A29E]" />
+                    <span>{profile.height}</span>
+                  </div>
+                )}
+                <div className="flex items-center gap-2 text-[#57534E]">
+                  <Heart className="w-4 h-4 text-[#E76F51]" />
+                  <span>
+                    {profile?.interested_in?.map(g => g === 'male' ? 'Men' : 'Women').join(' & ')}
+                  </span>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* First Date Idea */}
+      <div className="bg-white rounded-2xl shadow-sm p-5 mb-6">
+        <div className="flex items-center gap-2 mb-4">
+          <Sparkles className="w-5 h-5 text-[#E76F51]" />
+          <h3 className="font-bold text-[#1C1917]" style={{ fontFamily: 'Syne, sans-serif' }}>
+            Your First Date Idea
+          </h3>
         </div>
 
-        {/* Interests */}
-        <div className="bg-white rounded-2xl border border-stone-200 p-6">
-          <h2 className="font-semibold text-lg text-[#1C1917] mb-4" style={{ fontFamily: 'Syne, sans-serif' }}>
-            Interests
-          </h2>
+        <div className="bg-gradient-to-r from-[#E76F51]/5 to-[#E9C46A]/5 rounded-xl p-4">
+          <h4 className="font-bold text-[#1C1917] mb-2">
+            {profile?.first_date_idea?.title || 'No idea yet'}
+          </h4>
+          <p className="text-sm text-[#57534E] mb-3">
+            {profile?.first_date_idea?.description}
+          </p>
           <div className="flex flex-wrap gap-2">
-            {INTEREST_OPTIONS.map(interest => (
-              <button
-                key={interest}
-                type="button"
-                onClick={() => toggleInterest(interest)}
-                className={`filter-chip capitalize ${
-                  formData.interests.includes(interest) ? 'active' : ''
-                }`}
-                data-testid={`interest-${interest}`}
+            {profile?.first_date_idea?.tags?.map((tag, idx) => (
+              <span 
+                key={idx}
+                className="px-3 py-1 rounded-full text-xs font-medium bg-white text-[#2A9D8F] border border-[#2A9D8F]/20"
               >
-                {interest}
-              </button>
+                {tag}
+              </span>
             ))}
           </div>
         </div>
+      </div>
 
-        {/* Submit */}
-        <div className="flex items-center justify-between">
-          {!isPremium && (
-            <Link to="/upgrade">
-              <Button 
-                type="button" 
-                variant="outline" 
-                className="rounded-full border-[#E76F51] text-[#E76F51]"
-              >
-                <Crown className="w-4 h-4 mr-2" />
-                Upgrade to Premium
-              </Button>
-            </Link>
-          )}
-          <Button
-            type="submit"
-            className="btn-primary rounded-full px-8 ml-auto"
-            disabled={loading}
-            data-testid="save-profile-btn"
-          >
-            {loading ? (
-              <span className="flex items-center gap-2">
-                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                Saving...
-              </span>
-            ) : (
-              <span className="flex items-center gap-2">
-                <Save className="w-4 h-4" />
-                Save Changes
-              </span>
-            )}
-          </Button>
+      {/* Date Preferences */}
+      <div className="bg-white rounded-2xl shadow-sm p-5">
+        <h3 className="font-bold text-[#1C1917] mb-4" style={{ fontFamily: 'Syne, sans-serif' }}>
+          Your Vibes
+        </h3>
+        <div className="flex flex-wrap gap-2">
+          {profile?.date_preferences?.map((pref, idx) => (
+            <span 
+              key={idx}
+              className="px-3 py-1.5 rounded-full text-sm font-medium bg-[#E76F51]/10 text-[#E76F51] capitalize"
+            >
+              {pref}
+            </span>
+          ))}
         </div>
-      </form>
+      </div>
     </div>
   );
 }

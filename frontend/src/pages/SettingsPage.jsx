@@ -1,13 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { 
-  Shield, 
-  Ban, 
-  Trash2, 
-  ChevronRight,
-  AlertTriangle
-} from 'lucide-react';
+import { toast } from 'sonner';
+import { ArrowLeft, Shield, Ban, LogOut, Trash2, ChevronRight } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import {
   AlertDialog,
@@ -24,21 +19,22 @@ import { useAuth } from '../context/AuthContext';
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 export default function SettingsPage() {
+  const navigate = useNavigate();
   const { logout } = useAuth();
   const [blockedUsers, setBlockedUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [unblockId, setUnblockId] = useState(null);
 
   useEffect(() => {
-    fetchBlockedUsers();
+    fetchBlocked();
   }, []);
 
-  const fetchBlockedUsers = async () => {
+  const fetchBlocked = async () => {
     try {
-      const response = await axios.get(`${API}/blocked-users`);
-      setBlockedUsers(response.data);
+      const response = await axios.get(`${API}/blocked`);
+      setBlockedUsers(response.data.blocked);
     } catch (error) {
-      toast.error('Failed to load blocked users');
+      console.error('Failed to load blocked users');
     } finally {
       setLoading(false);
     }
@@ -46,132 +42,117 @@ export default function SettingsPage() {
 
   const handleUnblock = async () => {
     if (!unblockId) return;
-    
     try {
       await axios.delete(`${API}/block/${unblockId}`);
-      setBlockedUsers(prev => prev.filter(u => u.id !== unblockId));
+      setBlockedUsers(prev => prev.filter(u => u.user_id !== unblockId));
       toast.success('User unblocked');
     } catch (error) {
-      toast.error('Failed to unblock user');
+      toast.error('Failed to unblock');
     } finally {
       setUnblockId(null);
     }
   };
 
+  const handleLogout = () => {
+    logout();
+    navigate('/auth');
+  };
+
   return (
-    <div className="max-w-2xl mx-auto animate-fadeIn">
-      <h1 
-        className="text-2xl sm:text-3xl font-bold text-[#1C1917] mb-8"
-        style={{ fontFamily: 'Syne, sans-serif' }}
-      >
-        Settings
-      </h1>
-
-      {/* Safety & Privacy */}
-      <div className="bg-white rounded-2xl border border-stone-200 overflow-hidden mb-6">
-        <div className="p-5 border-b border-stone-100">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-[#2A9D8F]/10 flex items-center justify-center">
-              <Shield className="w-5 h-5 text-[#2A9D8F]" />
-            </div>
-            <div>
-              <h2 className="font-semibold text-[#1C1917]" style={{ fontFamily: 'Syne, sans-serif' }}>
-                Safety & Privacy
-              </h2>
-              <p className="text-sm text-[#57534E]">Manage your blocked users</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="p-5">
-          <h3 className="text-sm font-medium text-[#57534E] mb-4 flex items-center gap-2">
-            <Ban className="w-4 h-4" />
-            Blocked Users ({blockedUsers.length})
-          </h3>
-
-          {loading ? (
-            <div className="space-y-3">
-              {[...Array(2)].map((_, i) => (
-                <div key={i} className="h-12 skeleton rounded-xl" />
-              ))}
-            </div>
-          ) : blockedUsers.length > 0 ? (
-            <div className="space-y-2">
-              {blockedUsers.map((user) => (
-                <div 
-                  key={user.id}
-                  className="flex items-center justify-between p-3 bg-[#FDFCF8] rounded-xl"
-                >
-                  <span className="font-medium text-[#1C1917]">{user.first_name}</span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setUnblockId(user.id)}
-                    className="text-[#E76F51] hover:text-[#D65D40]"
-                    data-testid={`unblock-btn-${user.id}`}
-                  >
-                    Unblock
-                  </Button>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-[#A8A29E] text-center py-4">
-              No blocked users
-            </p>
-          )}
-        </div>
+    <div className="min-h-screen bg-[#FDFCF8] p-4 pb-24">
+      {/* Header */}
+      <div className="flex items-center gap-3 mb-6">
+        <button 
+          onClick={() => navigate('/profile')}
+          className="p-2 -ml-2 hover:bg-stone-100 rounded-full"
+        >
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+        <h1 className="text-2xl font-bold text-[#1C1917]" style={{ fontFamily: 'Syne, sans-serif' }}>
+          Settings
+        </h1>
       </div>
 
-      {/* Account */}
-      <div className="bg-white rounded-2xl border border-stone-200 overflow-hidden">
-        <div className="p-5 border-b border-stone-100">
+      {/* Blocked Users */}
+      <div className="bg-white rounded-2xl shadow-sm overflow-hidden mb-6">
+        <div className="p-4 border-b border-stone-100">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-stone-100 flex items-center justify-center">
-              <AlertTriangle className="w-5 h-5 text-[#57534E]" />
+            <div className="w-10 h-10 rounded-xl bg-[#E76F51]/10 flex items-center justify-center">
+              <Ban className="w-5 h-5 text-[#E76F51]" />
             </div>
             <div>
-              <h2 className="font-semibold text-[#1C1917]" style={{ fontFamily: 'Syne, sans-serif' }}>
-                Account
-              </h2>
-              <p className="text-sm text-[#57534E]">Manage your account</p>
+              <h3 className="font-semibold text-[#1C1917]">Blocked Users</h3>
+              <p className="text-xs text-[#57534E]">{blockedUsers.length} blocked</p>
             </div>
           </div>
         </div>
 
-        <div className="p-5 space-y-2">
-          <button 
-            onClick={logout}
-            className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-[#FDFCF8] transition-colors text-left"
-            data-testid="logout-btn"
-          >
+        {blockedUsers.length > 0 ? (
+          <div className="divide-y divide-stone-100">
+            {blockedUsers.map(user => (
+              <div 
+                key={user.user_id}
+                className="p-4 flex items-center justify-between"
+              >
+                <span className="font-medium">{user.first_name}</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setUnblockId(user.user_id)}
+                  className="text-[#E76F51]"
+                  data-testid={`unblock-${user.user_id}`}
+                >
+                  Unblock
+                </Button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="p-4 text-sm text-[#A8A29E] text-center">No blocked users</p>
+        )}
+      </div>
+
+      {/* Account Actions */}
+      <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+        <button
+          onClick={handleLogout}
+          className="w-full p-4 flex items-center justify-between hover:bg-stone-50 transition-colors"
+          data-testid="logout-btn"
+        >
+          <div className="flex items-center gap-3">
+            <LogOut className="w-5 h-5 text-[#57534E]" />
             <span className="text-[#1C1917]">Log out</span>
-            <ChevronRight className="w-5 h-5 text-[#A8A29E]" />
-          </button>
-          
-          <button 
-            className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-red-50 transition-colors text-left group"
+          </div>
+          <ChevronRight className="w-5 h-5 text-[#A8A29E]" />
+        </button>
+
+        <div className="border-t border-stone-100">
+          <button
+            className="w-full p-4 flex items-center justify-between hover:bg-red-50 transition-colors"
             data-testid="delete-account-btn"
           >
-            <span className="text-red-500 group-hover:text-red-600">Delete Account</span>
-            <Trash2 className="w-5 h-5 text-red-400 group-hover:text-red-500" />
+            <div className="flex items-center gap-3">
+              <Trash2 className="w-5 h-5 text-red-500" />
+              <span className="text-red-500">Delete Account</span>
+            </div>
+            <ChevronRight className="w-5 h-5 text-red-300" />
           </button>
         </div>
       </div>
 
       {/* App Info */}
       <div className="mt-8 text-center text-sm text-[#A8A29E]">
-        <p>DateFirst v1.0.0</p>
-        <p className="mt-1">Made with love for meaningful connections</p>
+        <p>DateFirst v2.0</p>
+        <p className="mt-1">Ideas before profiles ❤️</p>
       </div>
 
       {/* Unblock Dialog */}
       <AlertDialog open={!!unblockId} onOpenChange={() => setUnblockId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Unblock this user?</AlertDialogTitle>
+            <AlertDialogTitle>Unblock user?</AlertDialogTitle>
             <AlertDialogDescription>
-              They'll be able to see your profile and dates again.
+              They'll be able to see your profile again.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -179,7 +160,6 @@ export default function SettingsPage() {
             <AlertDialogAction 
               onClick={handleUnblock}
               className="rounded-full"
-              data-testid="confirm-unblock-btn"
             >
               Unblock
             </AlertDialogAction>

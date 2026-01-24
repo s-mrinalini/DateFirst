@@ -4,16 +4,8 @@ import axios from 'axios';
 import { toast } from 'sonner';
 import { format, parseISO } from 'date-fns';
 import { 
-  ArrowLeft, 
-  Send, 
-  MoreVertical, 
-  Flag, 
-  Ban,
-  MapPin,
-  Clock,
-  DollarSign,
-  Check,
-  Calendar
+  ArrowLeft, Send, MoreVertical, Flag, Ban, Calendar, MapPin,
+  DollarSign, Check, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -26,23 +18,17 @@ import {
   DropdownMenuTrigger,
 } from '../components/ui/dropdown-menu';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '../components/ui/dialog';
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '../components/ui/collapsible';
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '../components/ui/alert-dialog';
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '../components/ui/select';
 import { useAuth } from '../context/AuthContext';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -55,17 +41,21 @@ export default function ChatPage() {
   const inputRef = useRef(null);
   
   const [thread, setThread] = useState(null);
+  const [otherUser, setOtherUser] = useState(null);
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
-  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
-  const [blockDialogOpen, setBlockDialogOpen] = useState(false);
-  const [reportDialogOpen, setReportDialogOpen] = useState(false);
+  const [planOpen, setPlanOpen] = useState(false);
+  const [datePlan, setDatePlan] = useState({
+    proposed_datetime: '',
+    proposed_location: '',
+    who_pays: ''
+  });
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchMessages, 5000); // Poll every 5 seconds
+    const interval = setInterval(fetchMessages, 5000);
     return () => clearInterval(interval);
   }, [threadId]);
 
@@ -80,14 +70,23 @@ export default function ChatPage() {
   const fetchData = async () => {
     try {
       const [threadRes, messagesRes] = await Promise.all([
-        axios.get(`${API}/chat/threads/${threadId}`),
-        axios.get(`${API}/chat/threads/${threadId}/messages`)
+        axios.get(`${API}/chat/${threadId}`),
+        axios.get(`${API}/chat/${threadId}/messages`)
       ]);
-      setThread(threadRes.data);
-      setMessages(messagesRes.data);
+      setThread(threadRes.data.thread);
+      setOtherUser(threadRes.data.other_user);
+      setMessages(messagesRes.data.messages);
+      
+      if (threadRes.data.thread?.date_plan) {
+        setDatePlan({
+          proposed_datetime: threadRes.data.thread.date_plan.proposed_datetime || '',
+          proposed_location: threadRes.data.thread.date_plan.proposed_location || '',
+          who_pays: threadRes.data.thread.date_plan.who_pays || ''
+        });
+      }
     } catch (error) {
       toast.error('Failed to load chat');
-      navigate('/chat');
+      navigate('/plans');
     } finally {
       setLoading(false);
     }
@@ -95,11 +94,9 @@ export default function ChatPage() {
 
   const fetchMessages = async () => {
     try {
-      const response = await axios.get(`${API}/chat/threads/${threadId}/messages`);
-      setMessages(response.data);
-    } catch (error) {
-      // Silently fail on polling errors
-    }
+      const response = await axios.get(`${API}/chat/${threadId}/messages`);
+      setMessages(response.data.messages);
+    } catch (error) {}
   };
 
   const handleSend = async (e) => {
@@ -108,203 +105,227 @@ export default function ChatPage() {
 
     setSending(true);
     try {
-      const response = await axios.post(`${API}/chat/threads/${threadId}/messages`, {
+      const response = await axios.post(`${API}/chat/${threadId}/messages`, {
         content: newMessage.trim()
       });
       setMessages(prev => [...prev, response.data]);
       setNewMessage('');
       inputRef.current?.focus();
     } catch (error) {
-      const message = error.response?.data?.detail || 'Failed to send message';
-      toast.error(message);
+      toast.error(error.response?.data?.detail || 'Failed to send');
     } finally {
       setSending(false);
     }
   };
 
+  const handleUpdatePlan = async (field, value) => {
+    try {
+      const data = { [field]: value };
+      await axios.put(`${API}/chat/${threadId}/plan`, data);
+      setDatePlan(prev => ({ ...prev, [field]: value }));
+      toast.success('Plan updated!');
+    } catch (error) {
+      toast.error('Failed to update');
+    }
+  };
+
   const handleConfirmDate = async () => {
     try {
-      await axios.put(`${API}/chat/threads/${threadId}/confirm`, {
-        is_confirmed: true
-      });
-      setThread(prev => ({ ...prev, is_confirmed: true }));
-      toast.success('Date confirmed!');
-      setConfirmDialogOpen(false);
+      await axios.put(`${API}/chat/${threadId}/plan`, { is_confirmed: true });
+      setThread(prev => ({
+        ...prev,
+        date_plan: { ...prev.date_plan, is_confirmed: true }
+      }));
+      toast.success('Date confirmed! 🎉');
     } catch (error) {
-      toast.error('Failed to confirm date');
+      toast.error('Failed to confirm');
     }
   };
 
   const handleBlock = async () => {
     try {
-      await axios.post(`${API}/block`, {
-        blocked_user_id: thread.other_user_id
-      });
+      await axios.post(`${API}/block`, { blocked_user_id: otherUser.user_id });
       toast.success('User blocked');
-      navigate('/chat');
+      navigate('/plans');
     } catch (error) {
-      toast.error('Failed to block user');
+      toast.error('Failed to block');
     }
   };
 
   const handleReport = async () => {
     try {
       await axios.post(`${API}/report`, {
-        reported_user_id: thread.other_user_id,
-        reason: 'inappropriate behavior'
+        reported_user_id: otherUser.user_id,
+        reason: 'inappropriate'
       });
       toast.success('Report submitted');
-      setReportDialogOpen(false);
     } catch (error) {
-      toast.error('Failed to submit report');
+      toast.error('Failed to report');
     }
   };
 
   if (loading) {
     return (
-      <div className="max-w-2xl mx-auto h-[calc(100vh-200px)] flex flex-col">
-        <div className="h-16 skeleton rounded-xl mb-4" />
-        <div className="flex-1 space-y-4">
-          {[...Array(5)].map((_, i) => (
-            <div key={i} className={`flex ${i % 2 === 0 ? '' : 'justify-end'}`}>
-              <div className={`h-12 w-48 skeleton rounded-2xl`} />
-            </div>
-          ))}
-        </div>
+      <div className="h-screen flex items-center justify-center">
+        <div className="animate-pulse text-[#E76F51]">Loading...</div>
       </div>
     );
   }
 
-  if (!thread) return null;
+  if (!thread || !otherUser) return null;
 
   return (
-    <div className="max-w-2xl mx-auto h-[calc(100vh-180px)] md:h-[calc(100vh-140px)] flex flex-col animate-fadeIn">
+    <div className="h-screen flex flex-col bg-[#FDFCF8]">
       {/* Header */}
-      <div className="bg-white rounded-2xl border border-stone-200 p-4 mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => navigate('/chat')}
-            className="md:hidden"
-            data-testid="back-btn"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </Button>
-          <Avatar className="w-10 h-10">
-            <AvatarImage src={thread.other_user_photo} />
-            <AvatarFallback className="bg-[#2A9D8F] text-white">
-              {thread.other_user_name?.[0]?.toUpperCase()}
-            </AvatarFallback>
-          </Avatar>
-          <div>
-            <h2 className="font-semibold text-[#1C1917]">{thread.other_user_name}</h2>
-            <p className="text-xs text-[#57534E] truncate max-w-[150px] sm:max-w-[250px]">
-              {thread.date_post_title}
-            </p>
-          </div>
+      <div className="bg-white border-b border-stone-200 px-4 py-3 flex items-center gap-3">
+        <button 
+          onClick={() => navigate('/plans')}
+          className="p-2 -ml-2 hover:bg-stone-100 rounded-full"
+          data-testid="back-btn"
+        >
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+
+        <Avatar className="w-10 h-10">
+          <AvatarImage src={otherUser.main_photo} />
+          <AvatarFallback className="bg-[#2A9D8F] text-white">
+            {otherUser.first_name?.[0]}
+          </AvatarFallback>
+        </Avatar>
+
+        <div className="flex-1 min-w-0">
+          <h2 className="font-bold text-[#1C1917]">{otherUser.first_name}</h2>
+          <p className="text-xs text-[#57534E] truncate">
+            {thread.matched_on_idea?.title}
+          </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          {thread.is_confirmed ? (
-            <span className="text-xs px-3 py-1.5 rounded-full bg-[#2A9D8F]/10 text-[#2A9D8F] font-medium flex items-center gap-1">
-              <Check className="w-3 h-3" />
-              Confirmed
-            </span>
-          ) : (
-            <Button
-              size="sm"
-              className="rounded-full bg-[#2A9D8F] hover:bg-[#238B7E] text-xs"
-              onClick={() => setConfirmDialogOpen(true)}
-              data-testid="confirm-date-btn"
-            >
-              <Check className="w-3 h-3 mr-1" />
-              Confirm Date
-            </Button>
-          )}
-          
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" data-testid="chat-menu-btn">
-                <MoreVertical className="w-5 h-5" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => setReportDialogOpen(true)}>
-                <Flag className="w-4 h-4 mr-2" />
-                Report
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem 
-                onClick={() => setBlockDialogOpen(true)}
-                className="text-red-600"
-              >
-                <Ban className="w-4 h-4 mr-2" />
-                Block User
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className="p-2 hover:bg-stone-100 rounded-full" data-testid="chat-menu">
+              <MoreVertical className="w-5 h-5 text-[#57534E]" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={handleReport}>
+              <Flag className="w-4 h-4 mr-2" /> Report
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={handleBlock} className="text-red-600">
+              <Ban className="w-4 h-4 mr-2" /> Block
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
-      {/* Date Details Card */}
-      {!thread.is_confirmed && (
-        <div className="bg-[#FDFCF8] rounded-xl border border-stone-200 p-4 mb-4">
-          <p className="text-sm text-[#57534E] mb-3">
-            Finalize the details for your date:
-          </p>
-          <div className="grid grid-cols-3 gap-3 text-sm">
-            <div className="flex items-center gap-2 text-[#57534E]">
-              <Calendar className="w-4 h-4 text-[#A8A29E]" />
-              <span>Time TBD</span>
+      {/* Matched On Banner */}
+      <div className="bg-gradient-to-r from-[#E76F51]/10 to-[#E9C46A]/10 px-4 py-3 border-b border-stone-200">
+        <p className="text-xs text-[#57534E] mb-1">Matched on their invite:</p>
+        <p className="font-medium text-[#1C1917]">{thread.matched_on_idea?.title}</p>
+        <p className="text-sm text-[#57534E] mt-1">{thread.matched_on_idea?.description}</p>
+      </div>
+
+      {/* Plan the Date Section */}
+      <Collapsible open={planOpen} onOpenChange={setPlanOpen}>
+        <CollapsibleTrigger asChild>
+          <button className="w-full bg-white border-b border-stone-200 px-4 py-3 flex items-center justify-between text-left">
+            <div className="flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-[#2A9D8F]" />
+              <span className="font-medium text-[#1C1917]">Plan the date</span>
+              {thread.date_plan?.is_confirmed && (
+                <span className="text-xs bg-[#2A9D8F] text-white px-2 py-0.5 rounded-full">
+                  Confirmed!
+                </span>
+              )}
             </div>
-            <div className="flex items-center gap-2 text-[#57534E]">
-              <MapPin className="w-4 h-4 text-[#A8A29E]" />
-              <span>Location TBD</span>
+            {planOpen ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+          </button>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <div className="bg-white border-b border-stone-200 p-4 space-y-4">
+            <div>
+              <label className="text-xs text-[#57534E] mb-1 block">When?</label>
+              <Input
+                type="datetime-local"
+                value={datePlan.proposed_datetime || ''}
+                onChange={(e) => handleUpdatePlan('proposed_datetime', e.target.value)}
+                className="rounded-xl"
+                data-testid="plan-datetime"
+              />
             </div>
-            <div className="flex items-center gap-2 text-[#57534E]">
-              <DollarSign className="w-4 h-4 text-[#A8A29E]" />
-              <span>Split TBD</span>
+
+            <div>
+              <label className="text-xs text-[#57534E] mb-1 block">Where?</label>
+              <Input
+                placeholder="Meeting spot..."
+                value={datePlan.proposed_location || ''}
+                onChange={(e) => handleUpdatePlan('proposed_location', e.target.value)}
+                onBlur={(e) => handleUpdatePlan('proposed_location', e.target.value)}
+                className="rounded-xl"
+                data-testid="plan-location"
+              />
             </div>
+
+            <div>
+              <label className="text-xs text-[#57534E] mb-1 block">Who pays?</label>
+              <Select 
+                value={datePlan.who_pays || ''} 
+                onValueChange={(v) => handleUpdatePlan('who_pays', v)}
+              >
+                <SelectTrigger className="rounded-xl" data-testid="plan-who-pays">
+                  <SelectValue placeholder="Decide..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="i_pay">I'll pay</SelectItem>
+                  <SelectItem value="split">Split</SelectItem>
+                  <SelectItem value="you_pay">They pay</SelectItem>
+                  <SelectItem value="decide_later">Decide later</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {!thread.date_plan?.is_confirmed && (
+              <Button
+                onClick={handleConfirmDate}
+                className="w-full rounded-full bg-[#2A9D8F] hover:bg-[#238B7E]"
+                data-testid="confirm-date-btn"
+              >
+                <Check className="w-4 h-4 mr-2" />
+                Confirm Date
+              </Button>
+            )}
           </div>
-        </div>
-      )}
+        </CollapsibleContent>
+      </Collapsible>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto space-y-4 mb-4 px-1">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.length === 0 ? (
-          <div className="h-full flex items-center justify-center">
-            <p className="text-[#A8A29E] text-center">
-              Start the conversation!<br />
-              Say hi to {thread.other_user_name}
-            </p>
+          <div className="text-center py-8 text-[#A8A29E]">
+            Say hi to {otherUser.first_name}!
           </div>
         ) : (
-          messages.map((msg, idx) => {
+          messages.map((msg) => {
             const isSent = msg.sender_id === user?.id;
-            const showDate = idx === 0 || 
-              format(parseISO(messages[idx - 1].created_at), 'yyyy-MM-dd') !== 
-              format(parseISO(msg.created_at), 'yyyy-MM-dd');
-
             return (
-              <React.Fragment key={msg.id}>
-                {showDate && (
-                  <div className="text-center text-xs text-[#A8A29E] py-2">
-                    {format(parseISO(msg.created_at), 'EEEE, MMMM d')}
-                  </div>
-                )}
-                <div className={`flex ${isSent ? 'justify-end' : 'justify-start'}`}>
-                  <div 
-                    className={`chat-bubble ${isSent ? 'chat-bubble-sent' : 'chat-bubble-received'}`}
-                    data-testid={`message-${msg.id}`}
-                  >
-                    <p>{msg.content}</p>
-                    <p className={`text-xs mt-1 ${isSent ? 'text-white/70' : 'text-[#A8A29E]'}`}>
-                      {format(parseISO(msg.created_at), 'h:mm a')}
-                    </p>
-                  </div>
+              <div 
+                key={msg.id}
+                className={`flex ${isSent ? 'justify-end' : 'justify-start'}`}
+              >
+                <div 
+                  className={`max-w-[75%] px-4 py-2.5 rounded-2xl ${
+                    isSent 
+                      ? 'bg-[#E76F51] text-white rounded-br-md' 
+                      : 'bg-white text-[#1C1917] shadow-sm rounded-bl-md'
+                  }`}
+                  data-testid={`msg-${msg.id}`}
+                >
+                  <p>{msg.content}</p>
+                  <p className={`text-xs mt-1 ${isSent ? 'text-white/70' : 'text-[#A8A29E]'}`}>
+                    {format(parseISO(msg.created_at), 'h:mm a')}
+                  </p>
                 </div>
-              </React.Fragment>
+              </div>
             );
           })
         )}
@@ -312,94 +333,28 @@ export default function ChatPage() {
       </div>
 
       {/* Input */}
-      <form onSubmit={handleSend} className="flex gap-2">
+      <form 
+        onSubmit={handleSend}
+        className="bg-white border-t border-stone-200 p-4 flex gap-2"
+      >
         <Input
           ref={inputRef}
-          placeholder="Type a message..."
+          placeholder="Message..."
           value={newMessage}
           onChange={(e) => setNewMessage(e.target.value)}
-          className="rounded-full bg-white"
+          className="rounded-full"
           maxLength={1000}
           data-testid="message-input"
         />
         <Button
           type="submit"
           disabled={!newMessage.trim() || sending}
-          className="btn-primary rounded-full px-6"
+          className="rounded-full bg-[#E76F51] hover:bg-[#D65D40] px-4"
           data-testid="send-btn"
         >
-          <Send className="w-4 h-4" />
+          <Send className="w-5 h-5" />
         </Button>
       </form>
-
-      {/* Confirm Dialog */}
-      <Dialog open={confirmDialogOpen} onOpenChange={setConfirmDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle style={{ fontFamily: 'Syne, sans-serif' }}>Confirm your date</DialogTitle>
-            <DialogDescription>
-              Mark this date as confirmed. This lets both of you know the plans are set!
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmDialogOpen(false)} className="rounded-full">
-              Not yet
-            </Button>
-            <Button 
-              onClick={handleConfirmDate}
-              className="rounded-full bg-[#2A9D8F] hover:bg-[#238B7E]"
-              data-testid="confirm-btn"
-            >
-              <Check className="w-4 h-4 mr-2" />
-              Confirm Date
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Block Dialog */}
-      <AlertDialog open={blockDialogOpen} onOpenChange={setBlockDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Block {thread.other_user_name}?</AlertDialogTitle>
-            <AlertDialogDescription>
-              They won't be able to see your profile or send you messages. This cannot be undone easily.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-full">Cancel</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={handleBlock}
-              className="rounded-full bg-red-500 hover:bg-red-600"
-              data-testid="confirm-block-btn"
-            >
-              Block
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Report Dialog */}
-      <AlertDialog open={reportDialogOpen} onOpenChange={setReportDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Report {thread.other_user_name}?</AlertDialogTitle>
-            <AlertDialogDescription>
-              If you believe this user has violated our guidelines, please report them.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-full">Cancel</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={handleReport}
-              className="rounded-full"
-              data-testid="confirm-report-btn"
-            >
-              Submit Report
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }

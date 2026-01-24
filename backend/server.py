@@ -1082,6 +1082,7 @@ async def send_chat_message(thread_id: str, data: ChatMessageCreate, current_use
     }
     
     await db.chat_messages.insert_one(message)
+    message.pop('_id', None)  # Remove MongoDB ObjectId before returning
     
     # Update thread
     update_data: Dict[str, Any] = {

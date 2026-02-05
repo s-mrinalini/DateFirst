@@ -225,9 +225,9 @@ export default function TemplateLibraryPage() {
             <SelectValue placeholder="Safety" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">Any Safety</SelectItem>
-            <SelectItem value="Public & Busy">Public & Busy</SelectItem>
-            <SelectItem value="Public & Calm">Public & Calm</SelectItem>
+            <SelectItem value="__any__">Any Safety</SelectItem>
+            <SelectItem value="Public & Busy">Public &amp; Busy</SelectItem>
+            <SelectItem value="Public & Calm">Public &amp; Calm</SelectItem>
           </SelectContent>
         </Select>
         
@@ -237,7 +237,7 @@ export default function TemplateLibraryPage() {
             <SelectValue placeholder="Cost" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">Any Cost</SelectItem>
+            <SelectItem value="__any__">Any Cost</SelectItem>
             <SelectItem value="Free">Free</SelectItem>
             <SelectItem value="$">$</SelectItem>
             <SelectItem value="$$">$$</SelectItem>

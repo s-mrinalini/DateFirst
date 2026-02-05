@@ -119,7 +119,7 @@ export default function TemplateLibraryPage() {
     }
   };
 
-  const useTemplate = (template) => {
+  const handleUseTemplate = (template) => {
     // Navigate to onboarding/edit with template data
     navigate('/onboarding', { 
       state: { 

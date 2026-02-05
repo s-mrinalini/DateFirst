@@ -275,15 +275,15 @@ export default function SafetyCenterPage() {
               <Clock className="w-5 h-5 text-[#E76F51]" />
               Date Check-In
             </CardTitle>
-            <CardDescription>Get reminded to confirm you're safe during dates</CardDescription>
+            <CardDescription>Get reminded to confirm you are safe during dates</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="bg-stone-50 rounded-lg p-4 text-sm text-[#57534E]">
               <p className="mb-3">When you confirm a date plan in chat, you can set up a check-in:</p>
               <ol className="list-decimal list-inside space-y-2">
                 <li>Set a check-in time (e.g., 1 hour after date starts)</li>
-                <li>If you don't confirm "I'm safe" in time, we'll alert your trusted contacts</li>
-                <li>Your contacts receive a generic "please check in" message</li>
+                <li>If you do not confirm &quot;I am safe&quot; in time, we will alert your trusted contacts</li>
+                <li>Your contacts receive a generic &quot;please check in&quot; message</li>
               </ol>
             </div>
           </CardContent>
@@ -328,7 +328,7 @@ export default function SafetyCenterPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="text-sm text-red-700">
-            <p className="mb-3">If you're ever in immediate danger, please contact:</p>
+            <p className="mb-3">If you are ever in immediate danger, please contact:</p>
             <ul className="space-y-2">
               <li><strong>Emergency:</strong> 911 (US) / 112 (India)</li>
               <li><strong>National Domestic Violence Hotline:</strong> 1-800-799-7233</li>

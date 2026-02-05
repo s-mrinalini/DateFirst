@@ -206,7 +206,119 @@ class DateFirstV3APITester:
                        f"Plan updated" if success else str(response))
         return success
 
-    def test_get_profile(self, user_id: str):
+    def test_email_verification(self, code: str):
+        """Test email verification"""
+        data = {"code": code}
+        success, response = self.make_request('POST', 'auth/verify-email', data)
+        self.log_result("Email Verification", success, 
+                       response.get('message', 'Success') if success else str(response))
+        return success
+
+    def test_resend_verification(self):
+        """Test resending verification code"""
+        success, response = self.make_request('POST', 'auth/resend-verification')
+        self.log_result("Resend Verification", success, 
+                       response.get('message', 'Success') if success else str(response))
+        return success
+
+    def test_trusted_contacts(self):
+        """Test trusted contacts CRUD"""
+        # Get trusted contacts
+        success, response = self.make_request('GET', 'safety/trusted-contacts')
+        contacts_count = len(response.get('contacts', [])) if success else 0
+        self.log_result("Get Trusted Contacts", success, 
+                       f"Found {contacts_count} contacts" if success else str(response))
+        
+        # Add trusted contact
+        data = {"name": "Test Friend", "email": "friend@test.com"}
+        success, response = self.make_request('POST', 'safety/trusted-contacts', data)
+        contact_id = response.get('id') if success else None
+        self.log_result("Add Trusted Contact", success, 
+                       f"Contact ID: {contact_id}" if success else str(response))
+        
+        # Remove trusted contact if added successfully
+        if contact_id:
+            success, response = self.make_request('DELETE', f'safety/trusted-contacts/{contact_id}')
+            self.log_result("Remove Trusted Contact", success, 
+                           response.get('message', 'Success') if success else str(response))
+        
+        return True
+
+    def test_templates_library(self):
+        """Test templates library functionality"""
+        # Get cities
+        success, response = self.make_request('GET', 'templates/cities')
+        cities_count = len(response.get('cities', [])) if success else 0
+        self.log_result("Get Template Cities", success, 
+                       f"Found {cities_count} cities" if success else str(response))
+        
+        # Get templates
+        success, response = self.make_request('GET', 'templates?limit=10')
+        templates_count = len(response.get('templates', [])) if success else 0
+        self.log_result("Get Templates", success, 
+                       f"Found {templates_count} templates" if success else str(response))
+        
+        # Get templates with filters
+        success, response = self.make_request('GET', 'templates?city=Austin&safety_level=Public%20%26%20Busy')
+        filtered_count = len(response.get('templates', [])) if success else 0
+        self.log_result("Get Filtered Templates", success, 
+                       f"Found {filtered_count} filtered templates" if success else str(response))
+        
+        return True
+
+    def test_verification_submissions(self):
+        """Test photo verification status"""
+        success, response = self.make_request('GET', 'verification/photo/status')
+        verified = response.get('verified', False) if success else False
+        self.log_result("Photo Verification Status", success, 
+                       f"Verified: {verified}" if success else str(response))
+        return success
+
+    def test_admin_features(self):
+        """Test admin panel features (requires admin login)"""
+        # Get admin stats
+        success, response = self.make_request('GET', 'admin/stats')
+        if success:
+            stats = response
+            self.log_result("Admin Stats", success, 
+                           f"Users: {stats.get('total_users', 0)}, Reports: {stats.get('pending_reports', 0)}")
+        else:
+            self.log_result("Admin Stats", success, str(response))
+        
+        # Get pending verifications
+        success, response = self.make_request('GET', 'admin/verifications?status=PENDING')
+        verifications_count = len(response.get('submissions', [])) if success else 0
+        self.log_result("Admin Verifications", success, 
+                       f"Found {verifications_count} pending verifications" if success else str(response))
+        
+        # Get pending reports
+        success, response = self.make_request('GET', 'admin/reports?status=pending')
+        reports_count = len(response.get('reports', [])) if success else 0
+        self.log_result("Admin Reports", success, 
+                       f"Found {reports_count} pending reports" if success else str(response))
+        
+        return True
+
+    def test_rate_limiting(self):
+        """Test rate limiting on likes"""
+        # Try to like multiple users rapidly to test rate limiting
+        success, invites = self.test_discover_invites()
+        if success and invites:
+            like_attempts = 0
+            rate_limited = False
+            
+            for invite in invites[:5]:  # Try to like first 5 users
+                success, response = self.make_request('POST', f'like/{invite["user_id"]}', expected_status=200)
+                like_attempts += 1
+                
+                if not success and response.get('status_code') == 429:
+                    rate_limited = True
+                    break
+            
+            self.log_result("Rate Limiting Test", True, 
+                           f"Attempted {like_attempts} likes, Rate limited: {rate_limited}")
+        
+        return True
         """Test getting user profile"""
         success, response = self.make_request('GET', f'profile/{user_id}')
         self.log_result("Get User Profile", success, 

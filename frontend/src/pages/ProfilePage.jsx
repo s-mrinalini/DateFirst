@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { 
   User, MapPin, Calendar, Ruler, Heart, Settings, 
-  ChevronRight, Edit2, Save, Sparkles
+  ChevronRight, Edit2, Save, Sparkles, Shield, BadgeCheck,
+  Camera, Phone, Mail, Crown, BookOpen
 } from 'lucide-react';
 import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
@@ -11,6 +12,7 @@ import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
 import { Slider } from '../components/ui/slider';
 import { Avatar, AvatarFallback, AvatarImage } from '../components/ui/avatar';
+import { Badge } from '../components/ui/badge';
 import { useAuth } from '../context/AuthContext';
 
 const DATE_TAGS = [
@@ -20,7 +22,7 @@ const DATE_TAGS = [
 ];
 
 export default function ProfilePage() {
-  const { user, profile, updateProfile, logout } = useAuth();
+  const { user, profile, updateProfile, logout, badges, emailVerified, photoVerified, phoneVerified } = useAuth();
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(false);
   
@@ -56,7 +58,7 @@ export default function ProfilePage() {
       toast.success('Profile updated!');
       setEditing(false);
     } catch (error) {
-      toast.error('Failed to update profile');
+      toast.error(error.response?.data?.detail || 'Failed to update profile');
     } finally {
       setLoading(false);
     }
@@ -81,12 +83,33 @@ export default function ProfilePage() {
         <h1 className="text-2xl font-bold text-[#1C1917]" style={{ fontFamily: 'Syne, sans-serif' }}>
           Profile
         </h1>
-        <Link to="/settings">
-          <Button variant="ghost" size="icon" data-testid="settings-btn">
-            <Settings className="w-5 h-5" />
-          </Button>
-        </Link>
+        <div className="flex items-center gap-2">
+          {user?.is_admin && (
+            <Link to="/admin">
+              <Button variant="ghost" size="icon" data-testid="admin-btn" className="text-[#E76F51]">
+                <Crown className="w-5 h-5" />
+              </Button>
+            </Link>
+          )}
+          <Link to="/settings">
+            <Button variant="ghost" size="icon" data-testid="settings-btn">
+              <Settings className="w-5 h-5" />
+            </Button>
+          </Link>
+        </div>
       </div>
+
+      {/* Verification Badges */}
+      {badges && badges.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-4">
+          {badges.map((badge, idx) => (
+            <Badge key={idx} variant="secondary" className="bg-[#2A9D8F]/10 text-[#2A9D8F]">
+              <BadgeCheck className="w-3 h-3 mr-1" />
+              {badge.label}
+            </Badge>
+          ))}
+        </div>
+      )}
 
       {/* Profile Card */}
       <div className="bg-white rounded-3xl shadow-lg overflow-hidden mb-6">
@@ -215,6 +238,36 @@ export default function ProfilePage() {
             </>
           )}
         </div>
+      </div>
+
+      {/* Quick Links */}
+      <div className="grid grid-cols-2 gap-3 mb-6">
+        <Link 
+          to="/safety"
+          className="bg-white rounded-2xl shadow-sm p-4 flex items-center gap-3 hover:shadow-md transition-all"
+          data-testid="safety-center-link"
+        >
+          <div className="w-10 h-10 rounded-full bg-[#2A9D8F]/10 flex items-center justify-center">
+            <Shield className="w-5 h-5 text-[#2A9D8F]" />
+          </div>
+          <div>
+            <p className="font-semibold text-sm">Safety Center</p>
+            <p className="text-xs text-[#A8A29E]">Trusted contacts, verify</p>
+          </div>
+        </Link>
+        <Link 
+          to="/templates"
+          className="bg-white rounded-2xl shadow-sm p-4 flex items-center gap-3 hover:shadow-md transition-all"
+          data-testid="templates-link"
+        >
+          <div className="w-10 h-10 rounded-full bg-[#E76F51]/10 flex items-center justify-center">
+            <BookOpen className="w-5 h-5 text-[#E76F51]" />
+          </div>
+          <div>
+            <p className="font-semibold text-sm">Date Ideas</p>
+            <p className="text-xs text-[#A8A29E]">Browse templates</p>
+          </div>
+        </Link>
       </div>
 
       {/* First Date Idea */}

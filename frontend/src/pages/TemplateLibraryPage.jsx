@@ -244,11 +244,11 @@ export default function TemplateLibraryPage() {
           </SelectContent>
         </Select>
         
-        {(filters.safety_level || filters.cost_hint) && (
+        {(filters.safety_level && filters.safety_level !== '__any__' || filters.cost_hint && filters.cost_hint !== '__any__') && (
           <Button 
             variant="ghost" 
             size="sm"
-            onClick={() => setFilters({ safety_level: '', cost_hint: '', place_type: '' })}
+            onClick={() => setFilters({ safety_level: '__any__', cost_hint: '__any__', place_type: '' })}
             className="text-[#A8A29E]"
           >
             <X className="w-3 h-3 mr-1" />

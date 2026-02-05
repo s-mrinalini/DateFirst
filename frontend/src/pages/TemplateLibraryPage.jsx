@@ -65,10 +65,10 @@ export default function TemplateLibraryPage() {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (selectedCity) params.append('city', selectedCity);
+      if (selectedCity && selectedCity !== '__all__') params.append('city', selectedCity);
       if (searchQuery) params.append('search', searchQuery);
-      if (filters.safety_level) params.append('safety_level', filters.safety_level);
-      if (filters.cost_hint) params.append('cost_hint', filters.cost_hint);
+      if (filters.safety_level && filters.safety_level !== '__any__') params.append('safety_level', filters.safety_level);
+      if (filters.cost_hint && filters.cost_hint !== '__any__') params.append('cost_hint', filters.cost_hint);
       params.append('limit', '100');
       
       const response = await axios.get(`${API}/templates?${params.toString()}`);

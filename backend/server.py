@@ -1983,7 +1983,7 @@ CITY_TEMPLATES = {
 # ==================== TEMPLATES API ====================
 # Routes for Date Idea Templates
 
-from server_part2 import DATE_IDEA_TEMPLATES_GLOBAL, CITY_TEMPLATES
+# Templates already defined above
 
 # Helper to normalize city names
 CITY_NAME_MAP = {

@@ -334,7 +334,7 @@ export default function TemplateLibraryPage() {
                   </div>
                   
                   <Button 
-                    onClick={() => useTemplate(template)}
+                    onClick={() => handleUseTemplate(template)}
                     className="w-full bg-[#E76F51] hover:bg-[#D65D40]"
                     data-testid={`use-template-${template.id}`}
                   >

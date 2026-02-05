@@ -7,6 +7,9 @@ import PlansPage from './PlansPage';
 import ChatPage from './ChatPage';
 import ProfilePage from './ProfilePage';
 import SettingsPage from './SettingsPage';
+import SafetyCenterPage from './SafetyCenterPage';
+import TemplateLibraryPage from './TemplateLibraryPage';
+import AdminPage from './AdminPage';
 
 const TABS = [
   { path: '/', icon: Compass, label: 'Discover' },
@@ -17,7 +20,10 @@ const TABS = [
 
 export default function MainApp() {
   const location = useLocation();
-  const isChat = location.pathname.startsWith('/chat/');
+  const hideNav = location.pathname.startsWith('/chat/') || 
+                  location.pathname.startsWith('/safety') ||
+                  location.pathname.startsWith('/templates') ||
+                  location.pathname.startsWith('/admin');
   
   const getActiveTab = () => {
     if (location.pathname === '/') return '/';
@@ -39,10 +45,13 @@ export default function MainApp() {
         <Route path="/chat/:threadId" element={<ChatPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/safety" element={<SafetyCenterPage />} />
+        <Route path="/templates" element={<TemplateLibraryPage />} />
+        <Route path="/admin" element={<AdminPage />} />
       </Routes>
 
       {/* Bottom Tab Bar */}
-      {!isChat && (
+      {!hideNav && (
         <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-lg border-t border-stone-200 px-4 pb-safe z-50">
           <div className="flex justify-around items-center h-16 max-w-lg mx-auto">
             {TABS.map(({ path, icon: Icon, label }) => {

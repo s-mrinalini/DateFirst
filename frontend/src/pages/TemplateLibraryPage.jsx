@@ -169,7 +169,7 @@ export default function TemplateLibraryPage() {
                 <SelectValue placeholder="Select city" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Cities</SelectItem>
+                <SelectItem value="__all__">All Cities</SelectItem>
                 {cities.map(city => (
                   <SelectItem key={city.name} value={city.name}>
                     {city.name} ({city.template_count})

@@ -39,7 +39,9 @@ export default function DiscoverPage() {
   const [loading, setLoading] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isLiking, setIsLiking] = useState(false);
+  const [isPassing, setIsPassing] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [swipeDirection, setSwipeDirection] = useState(null); // 'left' or 'right'
   
   // Filters
   const [filters, setFilters] = useState({

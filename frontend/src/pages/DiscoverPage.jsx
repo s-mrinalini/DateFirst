@@ -89,39 +89,54 @@ export default function DiscoverPage() {
     
     const invite = invites[currentIndex];
     setIsLiking(true);
+    setSwipeDirection('right');
     
     try {
       const response = await axios.post(`${API}/like/${invite.user_id}`);
       
       if (response.data.is_match) {
-        toast.success(`🎉 It's a match with ${invite.first_name}!`, {
+        toast.success(`It is a match with ${invite.first_name}!`, {
           description: 'Go to Plans to start chatting!'
         });
       } else {
         toast.success(`Liked ${invite.first_name}'s invite!`);
       }
       
-      setCurrentIndex(prev => prev + 1);
+      // Wait for animation to complete
+      setTimeout(() => {
+        setCurrentIndex(prev => prev + 1);
+        setSwipeDirection(null);
+      }, 300);
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to like');
+      setSwipeDirection(null);
     } finally {
       setIsLiking(false);
     }
   };
 
   const handlePass = async () => {
-    if (currentIndex >= invites.length) return;
+    if (isPassing || currentIndex >= invites.length) return;
     
     const invite = invites[currentIndex];
+    setIsPassing(true);
+    setSwipeDirection('left');
     
     try {
       // Record the pass so this profile doesn't show again
       await axios.post(`${API}/pass/${invite.user_id}`);
-      setCurrentIndex(prev => prev + 1);
+      toast('Passed', { duration: 1500 });
     } catch (error) {
       // Still move to next even if pass fails
-      setCurrentIndex(prev => prev + 1);
+      console.error('Pass failed:', error);
     }
+    
+    // Wait for animation to complete
+    setTimeout(() => {
+      setCurrentIndex(prev => prev + 1);
+      setSwipeDirection(null);
+      setIsPassing(false);
+    }, 300);
   };
 
   const toggleQuickTag = (tag) => {

@@ -41,16 +41,18 @@ export default function AdminPage() {
 
   const fetchData = async () => {
     try {
-      const [statsRes, verificationsRes, reportsRes, auditRes] = await Promise.all([
+      const [statsRes, verificationsRes, reportsRes, auditRes, feedbackRes] = await Promise.all([
         axios.get(`${API}/admin/stats`),
         axios.get(`${API}/admin/verifications?status=PENDING`),
         axios.get(`${API}/admin/reports?status=pending`),
-        axios.get(`${API}/admin/audit-log?limit=20`)
+        axios.get(`${API}/admin/audit-log?limit=20`),
+        axios.get(`${API}/admin/feedback-analytics?days=30`)
       ]);
       setStats(statsRes.data);
       setVerifications(verificationsRes.data.submissions || []);
       setReports(reportsRes.data.reports || []);
       setAuditLog(auditRes.data.actions || []);
+      setFeedbackAnalytics(feedbackRes.data);
     } catch (error) {
       console.error('Failed to fetch admin data:', error);
       toast.error('Failed to load admin data');

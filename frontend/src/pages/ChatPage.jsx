@@ -1,15 +1,16 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'sonner';
 import { format, parseISO } from 'date-fns';
 import { 
   ArrowLeft, Send, MoreVertical, Flag, Ban, Calendar, MapPin,
-  DollarSign, Check, ChevronDown, ChevronUp
+  DollarSign, Check, ChevronDown, ChevronUp, Star, Shield
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '../components/ui/avatar';
+import { Badge } from '../components/ui/badge';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,6 +31,8 @@ import {
   SelectValue,
 } from '../components/ui/select';
 import { useAuth } from '../context/AuthContext';
+import { useSocket } from '../hooks/useSocket';
+import DateFeedback from '../components/DateFeedback';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -47,17 +50,90 @@ export default function ChatPage() {
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
+  const [isTyping, setIsTyping] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
   const [datePlan, setDatePlan] = useState({
     proposed_datetime: '',
     proposed_location: '',
     who_pays: ''
   });
 
+  // WebSocket integration
+  const { 
+    isConnected, 
+    connect, 
+    joinThread, 
+    leaveThread, 
+    sendTyping, 
+    onNewMessage, 
+    onUserTyping,
+    onDatePlanUpdated 
+  } = useSocket();
+
+  // Connect to socket on mount
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      connect(token);
+    }
+    return () => leaveThread(threadId);
+  }, [connect, leaveThread, threadId]);
+
+  // Join thread room when connected
+  useEffect(() => {
+    if (isConnected && threadId) {
+      joinThread(threadId);
+    }
+  }, [isConnected, threadId, joinThread]);
+
+  // Listen for new messages
+  useEffect(() => {
+    onNewMessage((data) => {
+      if (data.thread_id === threadId) {
+        setMessages(prev => {
+          // Avoid duplicates
+          if (prev.some(m => m.id === data.message.id)) {
+            return prev;
+          }
+          return [...prev, data.message];
+        });
+        scrollToBottom();
+      }
+    });
+
+    onUserTyping((data) => {
+      if (data.thread_id === threadId && data.user_id !== user?.id) {
+        setIsTyping(data.is_typing);
+        // Auto-clear typing indicator after 3 seconds
+        if (data.is_typing) {
+          setTimeout(() => setIsTyping(false), 3000);
+        }
+      }
+    });
+
+    onDatePlanUpdated((data) => {
+      if (data.thread_id === threadId) {
+        setDatePlan(data.date_plan || {});
+        setThread(prev => prev ? { ...prev, date_plan: data.date_plan } : null);
+      }
+    });
+  }, [threadId, onNewMessage, onUserTyping, onDatePlanUpdated, user?.id]);
+
+  // Handle typing indicator
+  const handleTyping = useCallback(() => {
+    sendTyping(threadId, true);
+  }, [threadId, sendTyping]);
+
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchMessages, 5000);
+    // Fallback polling for when socket is not connected
+    const interval = setInterval(() => {
+      if (!isConnected) {
+        fetchMessages();
+      }
+    }, 5000);
     return () => clearInterval(interval);
-  }, [threadId]);
+  }, [threadId, isConnected]);
 
   useEffect(() => {
     scrollToBottom();

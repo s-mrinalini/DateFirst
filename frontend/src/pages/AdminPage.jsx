@@ -25,6 +25,7 @@ export default function AdminPage() {
   const [verifications, setVerifications] = useState([]);
   const [reports, setReports] = useState([]);
   const [auditLog, setAuditLog] = useState([]);
+  const [feedbackAnalytics, setFeedbackAnalytics] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState(null);
   const [actionDialog, setActionDialog] = useState({ open: false, type: null, item: null });

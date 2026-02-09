@@ -430,6 +430,11 @@ async def get_blocked_user_ids(user_id: str) -> List[str]:
     blocked_ids.discard(user_id)
     return list(blocked_ids)
 
+async def get_passed_user_ids(user_id: str) -> List[str]:
+    """Get list of user IDs that the user has passed/disliked"""
+    passes = await db.passes.find({"passer_id": user_id}, {"_id": 0, "passed_id": 1}).to_list(10000)
+    return [p['passed_id'] for p in passes]
+
 async def are_matched(user1_id: str, user2_id: str) -> bool:
     match = await db.matches.find_one({
         "$or": [

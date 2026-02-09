@@ -1,9 +1,11 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, Query, Request, UploadFile, File, Form, BackgroundTasks
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
+import socketio
 import os
 import logging
 from pathlib import Path
@@ -24,6 +26,10 @@ import json
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
+
+# Import services
+from services import sms_service, email_service, file_storage
+from websocket_handler import sio, broadcast_new_message, broadcast_date_plan_update, broadcast_match, send_notification
 
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
@@ -49,7 +55,15 @@ RATE_LIMITS = {
 UPLOAD_DIR = Path(os.environ.get('UPLOAD_DIR', '/app/uploads'))
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
+# Create FastAPI app
 app = FastAPI(title="DateFirst API v3 - Safety Enhanced")
+
+# Mount static files for uploads
+app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
+
+# Create Socket.IO ASGI app
+socket_app = socketio.ASGIApp(sio, other_asgi_app=app)
+
 api_router = APIRouter(prefix="/api")
 security = HTTPBearer()
 ph = PasswordHasher()

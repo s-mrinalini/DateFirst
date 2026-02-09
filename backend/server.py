@@ -1729,27 +1729,21 @@ async def share_date_plan(thread_id: str, contact_id: str = Query(...), current_
     other_name = thread['user2_name'] if thread['user1_id'] == current_user['id'] else thread['user1_name']
     date_plan = thread.get('date_plan', {})
     
-    summary = f"""
-Date Plan Summary for {my_profile.get('first_name', 'User')}
-
-Meeting: {other_name}
-When: {date_plan.get('proposed_datetime', 'Not set')}
-Where: {date_plan.get('proposed_location', 'Not set')}
-
-Safety Tips:
-- Meet in a public place
-- Tell someone when you arrive and leave
-- Trust your instincts
-
-This message was shared via DateFirst Safety Center.
-"""
-    
-    # TODO: In production, send email to contact
-    logger.info(f"Sharing date plan with {contact['email']}")
+    # Send email to trusted contact
+    email_result = await email_service.send_date_plan_share(
+        to_email=contact['email'],
+        contact_name=contact['name'],
+        user_name=my_profile.get('first_name', 'User'),
+        match_name=other_name,
+        date_time=date_plan.get('proposed_datetime', 'Not set'),
+        location=date_plan.get('proposed_location', 'Not set')
+    )
+    logger.info(f"Shared date plan with {contact['email']}: {email_result}")
     
     return {
         "message": f"Date plan shared with {contact['name']}",
-        "summary": summary
+        "email_sent": email_result.get('success', False),
+        "mock": email_result.get('mock', False)
     }
 
 # ==================== BLOCK & REPORT ====================

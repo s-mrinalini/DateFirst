@@ -1571,6 +1571,9 @@ async def update_date_plan(thread_id: str, data: DatePlanUpdate, current_user: d
     
     thread = await db.chat_threads.find_one({"id": thread_id}, {"_id": 0})
     
+    # Broadcast date plan update via WebSocket
+    await broadcast_date_plan_update(thread_id, thread.get('date_plan'), current_user['id'])
+    
     # Safe meetup suggestions when date is planned
     suggestions = []
     if thread.get('date_plan', {}).get('proposed_location'):

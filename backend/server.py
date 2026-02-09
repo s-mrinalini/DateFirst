@@ -282,6 +282,26 @@ class AdminVerificationAction(BaseModel):
     status: str  # APPROVED, REJECTED
     notes: Optional[str] = None
 
+# NEW: Pass/Dislike model
+class PassCreate(BaseModel):
+    passed_user_id: str
+
+# NEW: Date Feedback model
+class DateFeedbackCreate(BaseModel):
+    thread_id: str
+    overall_rating: int = Field(..., ge=1, le=5)  # 1-5 stars
+    safety_rating: int = Field(..., ge=1, le=5)  # How safe did you feel?
+    accuracy_rating: int = Field(..., ge=1, le=5)  # Did the date match the idea?
+    would_recommend: bool = True
+    feedback_text: Optional[str] = None
+    tags: List[str] = []  # "great_conversation", "felt_safe", "punctual", "respectful", etc.
+
+# NEW: File upload response
+class FileUploadResponse(BaseModel):
+    success: bool
+    url: Optional[str] = None
+    error: Optional[str] = None
+
 # ==================== AUTH HELPERS ====================
 
 def hash_password(password: str) -> str:

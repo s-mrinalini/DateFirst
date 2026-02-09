@@ -588,8 +588,14 @@ async def resend_verification(current_user: dict = Depends(get_current_user)):
         }}
     )
     
-    logger.info(f"New verification code for {current_user['email']}: {verification_code}")
-    return {"message": f"Verification code sent. Code: {verification_code}"}  # Remove in production
+    # Send verification email
+    email_result = await email_service.send_verification_email(current_user['email'], verification_code)
+    logger.info(f"Resent verification to {current_user['email']}: {email_result}")
+    
+    return {
+        "message": "Verification code sent to your email",
+        "verification_code": verification_code if email_result.get('mock') else None
+    }
 
 @api_router.post("/auth/login")
 async def login(data: UserLogin, request: Request):

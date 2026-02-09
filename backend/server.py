@@ -654,6 +654,7 @@ async def get_me(current_user: dict = Depends(get_current_user)):
             "email_verified": current_user.get('email_verified', False),
             "photo_verified": current_user.get('photo_verified', False),
             "phone_verified": current_user.get('phone_verified', False),
+            "is_admin": current_user.get('is_admin', False),
             "badges": get_verification_badges(current_user)
         },
         "profile": get_full_profile(profile, current_user) if profile else None,

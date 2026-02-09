@@ -2743,6 +2743,107 @@ async def admin_stats(admin_user: dict = Depends(get_admin_user)):
     
     return stats
 
+@api_router.get("/admin/feedback-analytics")
+async def admin_feedback_analytics(
+    days: int = Query(30, ge=1, le=365),
+    admin_user: dict = Depends(get_admin_user)
+):
+    """Get aggregated date feedback analytics"""
+    now = datetime.now(timezone.utc)
+    since = (now - timedelta(days=days)).isoformat()
+    
+    # Get all feedback in the time period
+    feedbacks = await db.date_feedback.find(
+        {"created_at": {"$gte": since}},
+        {"_id": 0}
+    ).to_list(10000)
+    
+    if not feedbacks:
+        return {
+            "total_feedbacks": 0,
+            "avg_overall_rating": 0,
+            "avg_safety_rating": 0,
+            "avg_accuracy_rating": 0,
+            "recommend_rate": 0,
+            "tag_counts": {},
+            "rating_distribution": {},
+            "recent_feedbacks": []
+        }
+    
+    total = len(feedbacks)
+    avg_overall = sum(f.get('overall_rating', 0) for f in feedbacks) / total
+    avg_safety = sum(f.get('safety_rating', 0) for f in feedbacks) / total
+    avg_accuracy = sum(f.get('accuracy_rating', 0) for f in feedbacks) / total
+    recommend_count = sum(1 for f in feedbacks if f.get('would_recommend', False))
+    recommend_rate = (recommend_count / total) * 100
+    
+    # Count tags
+    tag_counts = {}
+    for f in feedbacks:
+        for tag in f.get('tags', []):
+            tag_counts[tag] = tag_counts.get(tag, 0) + 1
+    
+    # Rating distribution (1-5 stars)
+    rating_distribution = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
+    for f in feedbacks:
+        rating = f.get('overall_rating', 0)
+        if 1 <= rating <= 5:
+            rating_distribution[rating] += 1
+    
+    # Get recent feedbacks with user details
+    recent = sorted(feedbacks, key=lambda x: x.get('created_at', ''), reverse=True)[:20]
+    recent_feedbacks = []
+    for f in recent:
+        reviewer = await db.profiles.find_one({"user_id": f.get('reviewer_id')}, {"_id": 0, "first_name": 1})
+        reviewed = await db.profiles.find_one({"user_id": f.get('reviewed_user_id')}, {"_id": 0, "first_name": 1})
+        recent_feedbacks.append({
+            "id": f.get('id'),
+            "reviewer_name": reviewer.get('first_name') if reviewer else 'Unknown',
+            "reviewed_name": reviewed.get('first_name') if reviewed else 'Unknown',
+            "overall_rating": f.get('overall_rating'),
+            "safety_rating": f.get('safety_rating'),
+            "would_recommend": f.get('would_recommend'),
+            "tags": f.get('tags', []),
+            "feedback_text": f.get('feedback_text', '')[:100],
+            "created_at": f.get('created_at')
+        })
+    
+    # Identify users with concerning feedback (avg safety < 3 with 2+ feedbacks)
+    user_safety_scores = {}
+    for f in feedbacks:
+        user_id = f.get('reviewed_user_id')
+        if user_id:
+            if user_id not in user_safety_scores:
+                user_safety_scores[user_id] = []
+            user_safety_scores[user_id].append(f.get('safety_rating', 5))
+    
+    flagged_users = []
+    for user_id, scores in user_safety_scores.items():
+        if len(scores) >= 2:
+            avg_score = sum(scores) / len(scores)
+            if avg_score < 3:
+                profile = await db.profiles.find_one({"user_id": user_id}, {"_id": 0, "first_name": 1, "main_photo": 1})
+                flagged_users.append({
+                    "user_id": user_id,
+                    "name": profile.get('first_name') if profile else 'Unknown',
+                    "photo": profile.get('main_photo') if profile else None,
+                    "avg_safety_rating": round(avg_score, 1),
+                    "feedback_count": len(scores)
+                })
+    
+    return {
+        "total_feedbacks": total,
+        "avg_overall_rating": round(avg_overall, 2),
+        "avg_safety_rating": round(avg_safety, 2),
+        "avg_accuracy_rating": round(avg_accuracy, 2),
+        "recommend_rate": round(recommend_rate, 1),
+        "tag_counts": tag_counts,
+        "rating_distribution": rating_distribution,
+        "recent_feedbacks": recent_feedbacks,
+        "flagged_users": flagged_users,
+        "period_days": days
+    }
+
 # ==================== HEALTH & SEED ====================
 
 @api_router.get("/health")

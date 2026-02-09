@@ -911,6 +911,7 @@ async def discover_profiles(
         raise HTTPException(status_code=400, detail="Complete your profile first")
     
     blocked_ids = await get_blocked_user_ids(current_user['id'])
+    passed_ids = await get_passed_user_ids(current_user['id'])  # NEW: Get passed/disliked users
     my_likes = await db.likes.find({"liker_id": current_user['id']}, {"_id": 0}).to_list(1000)
     liked_ids = [like['liked_id'] for like in my_likes]
     
@@ -921,7 +922,8 @@ async def discover_profiles(
     for m in my_matches:
         matched_ids.append(m['user1_id'] if m['user2_id'] == current_user['id'] else m['user2_id'])
     
-    exclude_ids = set(blocked_ids + liked_ids + matched_ids + [current_user['id']])
+    # Exclude blocked, passed, liked, matched, and self
+    exclude_ids = set(blocked_ids + passed_ids + liked_ids + matched_ids + [current_user['id']])
     
     query: Dict[str, Any] = {"user_id": {"$nin": list(exclude_ids)}}
     

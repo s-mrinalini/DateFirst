@@ -74,7 +74,7 @@ export default function PhotoVerificationPage() {
         setUploadProgress(prev => Math.min(prev + 10, 90));
       }, 200);
 
-      const response = await axios.post(`${API}/verify/photo`, formData, {
+      const response = await axios.post(`${API}/verification/photo/submit`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },

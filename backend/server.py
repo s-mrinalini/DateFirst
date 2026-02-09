@@ -853,7 +853,7 @@ async def get_photo_verification_status(current_user: dict = Depends(get_current
 
 @api_router.post("/verification/phone/start")
 async def start_phone_verification(data: PhoneVerificationStart, current_user: dict = Depends(get_current_user)):
-    """Start phone verification - sends OTP (mock for MVP)"""
+    """Start phone verification - sends OTP via SMS"""
     if current_user.get('phone_verified'):
         raise HTTPException(status_code=400, detail="Phone already verified")
     
@@ -870,10 +870,14 @@ async def start_phone_verification(data: PhoneVerificationStart, current_user: d
         }}
     )
     
-    # TODO: In production, integrate with SMS provider (Twilio, etc.)
-    logger.info(f"Phone OTP for {current_user['id']}: {otp}")
+    # Send OTP via SMS service
+    sms_result = await sms_service.send_otp(data.phone_number, otp)
+    logger.info(f"Phone OTP sent to {data.phone_number}: {sms_result}")
     
-    return {"message": f"OTP sent to {data.phone_number}. Code: {otp}"}  # Remove code in production
+    return {
+        "message": f"OTP sent to {data.phone_number}",
+        "otp": otp if sms_result.get('mock') else None  # Only show in mock mode
+    }
 
 @api_router.post("/verification/phone/verify")
 async def verify_phone(data: PhoneVerificationVerify, current_user: dict = Depends(get_current_user)):

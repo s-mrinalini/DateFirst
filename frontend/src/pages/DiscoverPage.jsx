@@ -359,7 +359,12 @@ export default function DiscoverPage() {
             <div className="flex justify-center gap-6 mt-6">
               <button
                 onClick={handlePass}
-                className="w-16 h-16 rounded-full bg-white shadow-lg flex items-center justify-center text-[#A8A29E] hover:text-red-500 hover:shadow-xl transition-all border border-stone-200"
+                disabled={isPassing}
+                className={`w-16 h-16 rounded-full bg-white shadow-lg flex items-center justify-center transition-all border border-stone-200 ${
+                  isPassing 
+                    ? 'text-red-500 scale-110 shadow-xl' 
+                    : 'text-[#A8A29E] hover:text-red-500 hover:shadow-xl'
+                } disabled:opacity-70`}
                 data-testid="pass-btn"
               >
                 <X className="w-8 h-8" />
@@ -368,7 +373,11 @@ export default function DiscoverPage() {
               <button
                 onClick={handleLike}
                 disabled={isLiking}
-                className="w-20 h-20 rounded-full bg-gradient-to-br from-[#E76F51] to-[#E9C46A] shadow-lg flex items-center justify-center text-white hover:shadow-xl transition-all disabled:opacity-50"
+                className={`w-20 h-20 rounded-full bg-gradient-to-br from-[#E76F51] to-[#E9C46A] shadow-lg flex items-center justify-center text-white transition-all ${
+                  isLiking 
+                    ? 'scale-110 shadow-xl' 
+                    : 'hover:shadow-xl'
+                } disabled:opacity-70`}
                 data-testid="like-btn"
               >
                 <Heart className="w-10 h-10" fill="white" />

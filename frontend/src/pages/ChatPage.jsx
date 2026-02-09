@@ -370,6 +370,18 @@ export default function ChatPage() {
                 Confirm Date
               </Button>
             )}
+
+            {thread.date_plan?.is_confirmed && (
+              <Button
+                onClick={() => setShowFeedback(true)}
+                variant="outline"
+                className="w-full rounded-full border-[#E9C46A] text-[#E9C46A] hover:bg-[#E9C46A]/10"
+                data-testid="leave-feedback-btn"
+              >
+                <Star className="w-4 h-4 mr-2" />
+                Leave Date Feedback
+              </Button>
+            )}
           </div>
         </CollapsibleContent>
       </Collapsible>

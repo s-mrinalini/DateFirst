@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, Optional
 
 class DateFirstV3APITester:
-    def __init__(self, base_url="https://emergent-clone-372.preview.emergentagent.com/api"):
+    def __init__(self, base_url="https://datefirst-chat.preview.emergentagent.com/api"):
         self.base_url = base_url
         self.token = None
         self.user_data = None

@@ -405,6 +405,19 @@ export default function ChatPage() {
             );
           })
         )}
+        
+        {/* Typing Indicator */}
+        {isTyping && (
+          <div className="flex justify-start" data-testid="typing-indicator">
+            <div className="bg-white text-[#1C1917] shadow-sm rounded-2xl rounded-bl-md px-4 py-3">
+              <div className="flex gap-1.5 items-center">
+                <div className="w-2 h-2 bg-[#A8A29E] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                <div className="w-2 h-2 bg-[#A8A29E] rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                <div className="w-2 h-2 bg-[#A8A29E] rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+              </div>
+            </div>
+          </div>
+        )}
         <div ref={messagesEndRef} />
       </div>
 
@@ -417,7 +430,10 @@ export default function ChatPage() {
           ref={inputRef}
           placeholder="Message..."
           value={newMessage}
-          onChange={(e) => setNewMessage(e.target.value)}
+          onChange={(e) => {
+            setNewMessage(e.target.value);
+            handleTyping();
+          }}
           className="rounded-full"
           maxLength={1000}
           data-testid="message-input"

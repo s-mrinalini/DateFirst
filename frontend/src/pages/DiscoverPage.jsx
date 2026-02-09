@@ -295,7 +295,13 @@ export default function DiscoverPage() {
           <div className="relative max-w-sm mx-auto">
             {/* Main Card */}
             <div 
-              className="bg-white rounded-3xl shadow-xl overflow-hidden animate-scaleIn"
+              className={`bg-white rounded-3xl shadow-xl overflow-hidden transition-all duration-300 ${
+                swipeDirection === 'left' 
+                  ? 'transform -translate-x-full rotate-[-15deg] opacity-0' 
+                  : swipeDirection === 'right' 
+                  ? 'transform translate-x-full rotate-[15deg] opacity-0'
+                  : 'animate-scaleIn'
+              }`}
               data-testid={`invite-card-${currentInvite.user_id}`}
             >
               {/* Photo */}

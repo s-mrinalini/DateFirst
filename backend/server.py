@@ -31,6 +31,10 @@ load_dotenv(ROOT_DIR / '.env')
 from services import sms_service, email_service, file_storage
 from websocket_handler import sio, broadcast_new_message, broadcast_date_plan_update, broadcast_match, send_notification
 
+# Import from modular packages (for future use)
+# from models import UserCreate, UserLogin, ProfileSetup, etc.
+# from utils import get_city_coords, haversine_distance, check_profanity, etc.
+
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)

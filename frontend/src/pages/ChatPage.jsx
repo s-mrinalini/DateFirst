@@ -459,6 +459,17 @@ export default function ChatPage() {
           <Send className="w-5 h-5" />
         </Button>
       </form>
+
+      {/* Date Feedback Modal */}
+      <DateFeedback
+        threadId={threadId}
+        matchName={otherUser?.first_name}
+        isOpen={showFeedback}
+        onClose={() => setShowFeedback(false)}
+        onSubmitted={() => {
+          toast.success('Feedback submitted!');
+        }}
+      />
     </div>
   );
 }

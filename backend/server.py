@@ -1162,6 +1162,239 @@ async def get_plans(current_user: dict = Depends(get_current_user)):
     
     return {"plans": result}
 
+# ==================== PASS / DISLIKE ROUTES ====================
+
+@api_router.post("/pass/{user_id}")
+async def pass_user(user_id: str, current_user: dict = Depends(get_current_user)):
+    """Pass/Dislike a user - they won't appear in discover again"""
+    if user_id == current_user['id']:
+        raise HTTPException(status_code=400, detail="Cannot pass yourself")
+    
+    existing = await db.passes.find_one({
+        "passer_id": current_user['id'],
+        "passed_id": user_id
+    })
+    if existing:
+        return {"message": "Already passed", "already_passed": True}
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    pass_record = {
+        "id": str(uuid.uuid4()),
+        "passer_id": current_user['id'],
+        "passed_id": user_id,
+        "created_at": now
+    }
+    await db.passes.insert_one(pass_record)
+    
+    return {"message": "Profile passed", "passed": True}
+
+@api_router.delete("/pass/{user_id}")
+async def undo_pass(user_id: str, current_user: dict = Depends(get_current_user)):
+    """Undo a pass - user will appear in discover again"""
+    result = await db.passes.delete_one({
+        "passer_id": current_user['id'],
+        "passed_id": user_id
+    })
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Pass not found")
+    return {"message": "Pass removed"}
+
+@api_router.get("/passed")
+async def get_passed_users(current_user: dict = Depends(get_current_user)):
+    """Get list of passed/disliked users"""
+    passes = await db.passes.find({"passer_id": current_user['id']}, {"_id": 0}).to_list(500)
+    passed_list = []
+    for p in passes:
+        profile = await db.profiles.find_one({"user_id": p['passed_id']}, {"_id": 0, "first_name": 1, "main_photo": 1})
+        if profile:
+            passed_list.append({
+                "user_id": p['passed_id'],
+                "first_name": profile.get('first_name'),
+                "main_photo": profile.get('main_photo'),
+                "passed_at": p['created_at']
+            })
+    return {"passed": passed_list, "count": len(passed_list)}
+
+# ==================== DATE FEEDBACK ROUTES ====================
+
+@api_router.post("/feedback")
+async def submit_date_feedback(data: DateFeedbackCreate, current_user: dict = Depends(get_current_user)):
+    """Submit feedback after a date"""
+    thread = await db.chat_threads.find_one({"id": data.thread_id}, {"_id": 0})
+    if not thread:
+        raise HTTPException(status_code=404, detail="Thread not found")
+    
+    if thread['user1_id'] != current_user['id'] and thread['user2_id'] != current_user['id']:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    # Check if date was confirmed
+    if not thread.get('date_plan', {}).get('is_confirmed'):
+        raise HTTPException(status_code=400, detail="Cannot leave feedback - date not confirmed")
+    
+    # Check for existing feedback
+    existing = await db.date_feedback.find_one({
+        "thread_id": data.thread_id,
+        "reviewer_id": current_user['id']
+    })
+    if existing:
+        raise HTTPException(status_code=400, detail="You've already submitted feedback for this date")
+    
+    other_user_id = thread['user2_id'] if thread['user1_id'] == current_user['id'] else thread['user1_id']
+    now = datetime.now(timezone.utc).isoformat()
+    
+    feedback = {
+        "id": str(uuid.uuid4()),
+        "thread_id": data.thread_id,
+        "reviewer_id": current_user['id'],
+        "reviewed_user_id": other_user_id,
+        "overall_rating": data.overall_rating,
+        "safety_rating": data.safety_rating,
+        "accuracy_rating": data.accuracy_rating,
+        "would_recommend": data.would_recommend,
+        "feedback_text": data.feedback_text,
+        "tags": data.tags,
+        "created_at": now
+    }
+    await db.date_feedback.insert_one(feedback)
+    
+    # Update user's average ratings (stored for internal use, not displayed)
+    await update_user_ratings(other_user_id)
+    
+    return {"message": "Thank you for your feedback!", "feedback_id": feedback['id']}
+
+async def update_user_ratings(user_id: str):
+    """Update user's aggregate ratings based on all feedback"""
+    feedbacks = await db.date_feedback.find({"reviewed_user_id": user_id}, {"_id": 0}).to_list(1000)
+    if not feedbacks:
+        return
+    
+    total = len(feedbacks)
+    avg_overall = sum(f['overall_rating'] for f in feedbacks) / total
+    avg_safety = sum(f['safety_rating'] for f in feedbacks) / total
+    avg_accuracy = sum(f['accuracy_rating'] for f in feedbacks) / total
+    recommend_rate = sum(1 for f in feedbacks if f['would_recommend']) / total * 100
+    
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": {
+            "ratings": {
+                "overall": round(avg_overall, 2),
+                "safety": round(avg_safety, 2),
+                "accuracy": round(avg_accuracy, 2),
+                "recommend_rate": round(recommend_rate, 1),
+                "count": total
+            }
+        }}
+    )
+
+@api_router.get("/feedback/thread/{thread_id}")
+async def get_thread_feedback(thread_id: str, current_user: dict = Depends(get_current_user)):
+    """Check if feedback has been submitted for a thread"""
+    thread = await db.chat_threads.find_one({"id": thread_id}, {"_id": 0})
+    if not thread:
+        raise HTTPException(status_code=404, detail="Thread not found")
+    
+    if thread['user1_id'] != current_user['id'] and thread['user2_id'] != current_user['id']:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    my_feedback = await db.date_feedback.find_one({
+        "thread_id": thread_id,
+        "reviewer_id": current_user['id']
+    }, {"_id": 0})
+    
+    return {
+        "has_submitted": my_feedback is not None,
+        "feedback": my_feedback,
+        "can_submit": thread.get('date_plan', {}).get('is_confirmed', False)
+    }
+
+# ==================== FILE UPLOAD ROUTES ====================
+
+@api_router.post("/upload/photo")
+async def upload_photo(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """Upload a photo (profile or verification)"""
+    # Validate file type
+    allowed_types = ['image/jpeg', 'image/png', 'image/webp']
+    if file.content_type not in allowed_types:
+        raise HTTPException(status_code=400, detail="Only JPEG, PNG, and WebP images are allowed")
+    
+    # Validate file size (max 5MB)
+    content = await file.read()
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File too large. Maximum 5MB allowed")
+    
+    # Upload using file storage service
+    result = await file_storage.upload_file(content, file.filename, file.content_type)
+    
+    if not result['success']:
+        raise HTTPException(status_code=500, detail=result.get('error', 'Upload failed'))
+    
+    return {
+        "success": True,
+        "url": result['url'],
+        "filename": result['filename'],
+        "size": result['size'],
+        "mock": result.get('mock', False)
+    }
+
+@api_router.post("/verification/photo/upload")
+async def upload_verification_photo(
+    gesture_type: str = Form(...),
+    selfie: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """Upload photo for verification with proper file storage"""
+    if current_user.get('photo_verified'):
+        raise HTTPException(status_code=400, detail="Already photo verified")
+    
+    # Check for pending submission
+    existing = await db.verification_submissions.find_one({
+        "user_id": current_user['id'],
+        "type": "photo",
+        "status": "PENDING"
+    })
+    if existing:
+        raise HTTPException(status_code=400, detail="You have a pending verification. Please wait for review.")
+    
+    # Validate file
+    allowed_types = ['image/jpeg', 'image/png', 'image/webp']
+    if selfie.content_type not in allowed_types:
+        raise HTTPException(status_code=400, detail="Only JPEG, PNG, and WebP images are allowed")
+    
+    content = await selfie.read()
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File too large. Maximum 5MB allowed")
+    
+    # Upload file
+    upload_result = await file_storage.upload_file(content, selfie.filename, selfie.content_type)
+    if not upload_result['success']:
+        raise HTTPException(status_code=500, detail="Failed to upload file")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    submission = {
+        "id": str(uuid.uuid4()),
+        "user_id": current_user['id'],
+        "type": "photo",
+        "gesture_type": gesture_type,
+        "media_url": upload_result['url'],
+        "status": "PENDING",
+        "admin_notes": None,
+        "reviewed_by": None,
+        "reviewed_at": None,
+        "created_at": now
+    }
+    await db.verification_submissions.insert_one(submission)
+    
+    return {
+        "message": "Photo verification submitted. You'll be notified once reviewed.",
+        "submission_id": submission['id'],
+        "mock": upload_result.get('mock', False)
+    }
+
 # ==================== CHAT ROUTES ====================
 
 @api_router.get("/chat/{thread_id}")

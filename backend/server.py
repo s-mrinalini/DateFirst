@@ -2763,3 +2763,7 @@ app.add_middleware(
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()
+
+# Export the socket-wrapped app for uvicorn
+# Use: uvicorn server:socket_app --host 0.0.0.0 --port 8001
+# Or for FastAPI only: uvicorn server:app --host 0.0.0.0 --port 8001

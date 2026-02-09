@@ -171,14 +171,17 @@ export default function AdminPage() {
 
         {/* Tabs */}
         <Tabs defaultValue="verifications" className="w-full">
-          <TabsList className="w-full mb-6">
-            <TabsTrigger value="verifications" className="flex-1">
+          <TabsList className="w-full mb-6 grid grid-cols-4">
+            <TabsTrigger value="verifications">
               Verifications ({verifications.length})
             </TabsTrigger>
-            <TabsTrigger value="reports" className="flex-1">
+            <TabsTrigger value="reports">
               Reports ({reports.length})
             </TabsTrigger>
-            <TabsTrigger value="audit" className="flex-1">
+            <TabsTrigger value="feedback">
+              Feedback
+            </TabsTrigger>
+            <TabsTrigger value="audit">
               Audit Log
             </TabsTrigger>
           </TabsList>

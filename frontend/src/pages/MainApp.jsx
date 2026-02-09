@@ -10,6 +10,7 @@ import SettingsPage from './SettingsPage';
 import SafetyCenterPage from './SafetyCenterPage';
 import TemplateLibraryPage from './TemplateLibraryPage';
 import AdminPage from './AdminPage';
+import PhotoVerificationPage from './PhotoVerificationPage';
 
 const TABS = [
   { path: '/', icon: Compass, label: 'Discover' },
@@ -23,7 +24,8 @@ export default function MainApp() {
   const hideNav = location.pathname.startsWith('/chat/') || 
                   location.pathname.startsWith('/safety') ||
                   location.pathname.startsWith('/templates') ||
-                  location.pathname.startsWith('/admin');
+                  location.pathname.startsWith('/admin') ||
+                  location.pathname.startsWith('/verify');
   
   const getActiveTab = () => {
     if (location.pathname === '/') return '/';
@@ -48,6 +50,7 @@ export default function MainApp() {
         <Route path="/safety" element={<SafetyCenterPage />} />
         <Route path="/templates" element={<TemplateLibraryPage />} />
         <Route path="/admin" element={<AdminPage />} />
+        <Route path="/verify/photo" element={<PhotoVerificationPage />} />
       </Routes>
 
       {/* Bottom Tab Bar */}

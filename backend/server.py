@@ -636,7 +636,8 @@ async def login(data: UserLogin, request: Request):
             "email": user['email'],
             "profile_complete": user.get('profile_complete', False),
             "email_verified": user.get('email_verified', False),
-            "first_name": profile.get('first_name') if profile else None
+            "first_name": profile.get('first_name') if profile else None,
+            "is_admin": user.get('is_admin', False)
         }
     }
 

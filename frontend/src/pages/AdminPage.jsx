@@ -5,7 +5,7 @@ import axios from 'axios';
 import { 
   Shield, Users, AlertTriangle, CheckCircle, XCircle, Clock,
   Eye, Ban, UserX, MessageSquare, Camera, ArrowLeft,
-  TrendingUp, Activity
+  TrendingUp, Activity, Star, ThumbsUp, BarChart3
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
@@ -13,6 +13,7 @@ import { Badge } from '../components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog';
 import { Textarea } from '../components/ui/textarea';
+import { Avatar, AvatarFallback, AvatarImage } from '../components/ui/avatar';
 import { useAuth } from '../context/AuthContext';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;

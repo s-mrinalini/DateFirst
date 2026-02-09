@@ -107,8 +107,19 @@ export default function DiscoverPage() {
     }
   };
 
-  const handlePass = () => {
-    setCurrentIndex(prev => prev + 1);
+  const handlePass = async () => {
+    if (currentIndex >= invites.length) return;
+    
+    const invite = invites[currentIndex];
+    
+    try {
+      // Record the pass so this profile doesn't show again
+      await axios.post(`${API}/pass/${invite.user_id}`);
+      setCurrentIndex(prev => prev + 1);
+    } catch (error) {
+      // Still move to next even if pass fails
+      setCurrentIndex(prev => prev + 1);
+    }
   };
 
   const toggleQuickTag = (tag) => {

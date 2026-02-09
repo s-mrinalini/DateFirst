@@ -1530,6 +1530,9 @@ async def send_message(thread_id: str, data: ChatMessageCreate, current_user: di
          "$inc": {"message_count": 1}}
     )
     
+    # Broadcast message via WebSocket
+    await broadcast_new_message(thread_id, message, current_user['id'])
+    
     response = {"message": message, "sent": True}
     if safety_prompt:
         response["safety_prompt"] = safety_prompt

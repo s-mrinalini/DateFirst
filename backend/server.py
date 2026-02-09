@@ -539,8 +539,9 @@ async def signup(data: UserCreate, request: Request):
     
     token = create_token(user_id, session_id)
     
-    # In production, send email with verification code
-    logger.info(f"Email verification code for {data.email}: {verification_code}")
+    # Send verification email
+    email_result = await email_service.send_verification_email(data.email, verification_code)
+    logger.info(f"Email verification sent to {data.email}: {email_result}")
     
     return {
         "token": token,
@@ -550,7 +551,8 @@ async def signup(data: UserCreate, request: Request):
             "profile_complete": False,
             "email_verified": False
         },
-        "message": f"Please verify your email. Code: {verification_code}"  # Remove in production
+        "message": "Please check your email for verification code",
+        "verification_code": verification_code if email_result.get('mock') else None  # Only show in mock mode
     }
 
 @api_router.post("/auth/verify-email")

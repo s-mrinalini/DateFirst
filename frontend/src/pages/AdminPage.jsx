@@ -323,6 +323,224 @@ export default function AdminPage() {
             )}
           </TabsContent>
 
+          {/* Date Feedback Analytics */}
+          <TabsContent value="feedback">
+            {feedbackAnalytics ? (
+              <div className="space-y-6">
+                {/* Overview Stats */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <Card>
+                    <CardContent className="pt-6">
+                      <div className="text-center">
+                        <p className="text-3xl font-bold text-[#1C1917]">
+                          {feedbackAnalytics.total_feedbacks}
+                        </p>
+                        <p className="text-sm text-[#57534E]">Total Feedbacks</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="pt-6">
+                      <div className="text-center">
+                        <p className="text-3xl font-bold text-[#E9C46A]">
+                          {feedbackAnalytics.avg_overall_rating}
+                        </p>
+                        <p className="text-sm text-[#57534E]">Avg Rating</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="pt-6">
+                      <div className="text-center">
+                        <p className="text-3xl font-bold text-[#2A9D8F]">
+                          {feedbackAnalytics.avg_safety_rating}
+                        </p>
+                        <p className="text-sm text-[#57534E]">Avg Safety</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="pt-6">
+                      <div className="text-center">
+                        <p className="text-3xl font-bold text-[#E76F51]">
+                          {feedbackAnalytics.recommend_rate}%
+                        </p>
+                        <p className="text-sm text-[#57534E]">Would Recommend</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Rating Distribution */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      <BarChart3 className="w-5 h-5 text-[#E76F51]" />
+                      Rating Distribution
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      {[5, 4, 3, 2, 1].map(rating => {
+                        const count = feedbackAnalytics.rating_distribution?.[rating] || 0;
+                        const total = feedbackAnalytics.total_feedbacks || 1;
+                        const percentage = (count / total) * 100;
+                        return (
+                          <div key={rating} className="flex items-center gap-3">
+                            <div className="flex items-center gap-1 w-16">
+                              <span className="text-sm font-medium">{rating}</span>
+                              <Star className="w-4 h-4 fill-[#E9C46A] text-[#E9C46A]" />
+                            </div>
+                            <div className="flex-1 h-4 bg-stone-100 rounded-full overflow-hidden">
+                              <div 
+                                className="h-full bg-[#E9C46A] rounded-full transition-all"
+                                style={{ width: `${percentage}%` }}
+                              />
+                            </div>
+                            <span className="text-sm text-[#57534E] w-12 text-right">{count}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Popular Tags */}
+                {Object.keys(feedbackAnalytics.tag_counts || {}).length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2 text-lg">
+                        <ThumbsUp className="w-5 h-5 text-[#2A9D8F]" />
+                        Popular Feedback Tags
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex flex-wrap gap-2">
+                        {Object.entries(feedbackAnalytics.tag_counts)
+                          .sort(([, a], [, b]) => b - a)
+                          .map(([tag, count]) => (
+                            <Badge key={tag} variant="outline" className="text-sm">
+                              {tag.replace(/_/g, ' ')} ({count})
+                            </Badge>
+                          ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Flagged Users - Safety Concerns */}
+                {feedbackAnalytics.flagged_users?.length > 0 && (
+                  <Card className="border-red-200 bg-red-50/50">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2 text-lg text-red-700">
+                        <AlertTriangle className="w-5 h-5" />
+                        Users with Safety Concerns
+                      </CardTitle>
+                      <CardDescription className="text-red-600">
+                        Users with avg safety rating below 3 from 2+ feedbacks
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3">
+                        {feedbackAnalytics.flagged_users.map(user => (
+                          <div key={user.user_id} className="flex items-center justify-between p-3 bg-white rounded-lg">
+                            <div className="flex items-center gap-3">
+                              <Avatar className="w-10 h-10">
+                                <AvatarImage src={user.photo} />
+                                <AvatarFallback>{user.name?.[0]}</AvatarFallback>
+                              </Avatar>
+                              <div>
+                                <p className="font-medium">{user.name}</p>
+                                <p className="text-xs text-red-600">
+                                  Safety: {user.avg_safety_rating}/5 ({user.feedback_count} reviews)
+                                </p>
+                              </div>
+                            </div>
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              className="text-red-600 border-red-300"
+                              onClick={() => setActionDialog({ 
+                                open: true, 
+                                type: 'user_action', 
+                                item: { reported_user_id: user.user_id } 
+                              })}
+                            >
+                              Take Action
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Recent Feedbacks */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Recent Feedbacks</CardTitle>
+                    <CardDescription>Last 30 days</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {feedbackAnalytics.recent_feedbacks?.length > 0 ? (
+                      <div className="space-y-4">
+                        {feedbackAnalytics.recent_feedbacks.map(fb => (
+                          <div key={fb.id} className="p-3 bg-stone-50 rounded-lg">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium">{fb.reviewer_name}</span>
+                                <span className="text-[#A8A29E]">rated</span>
+                                <span className="font-medium">{fb.reviewed_name}</span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                {[...Array(5)].map((_, i) => (
+                                  <Star 
+                                    key={i} 
+                                    className={`w-4 h-4 ${
+                                      i < fb.overall_rating 
+                                        ? 'fill-[#E9C46A] text-[#E9C46A]' 
+                                        : 'text-stone-300'
+                                    }`} 
+                                  />
+                                ))}
+                              </div>
+                            </div>
+                            <div className="flex flex-wrap gap-1 mb-2">
+                              {fb.tags?.map(tag => (
+                                <Badge key={tag} variant="secondary" className="text-xs">
+                                  {tag.replace(/_/g, ' ')}
+                                </Badge>
+                              ))}
+                              {fb.would_recommend ? (
+                                <Badge className="bg-[#2A9D8F] text-xs">Would recommend</Badge>
+                              ) : (
+                                <Badge variant="destructive" className="text-xs">Would not recommend</Badge>
+                              )}
+                            </div>
+                            {fb.feedback_text && (
+                              <p className="text-sm text-[#57534E] italic">"{fb.feedback_text}"</p>
+                            )}
+                            <p className="text-xs text-[#A8A29E] mt-2">
+                              {new Date(fb.created_at).toLocaleDateString()}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-center text-[#A8A29E] py-8">No feedbacks yet</p>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            ) : (
+              <Card>
+                <CardContent className="py-12 text-center text-[#A8A29E]">
+                  Loading feedback analytics...
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+
           {/* Audit Log */}
           <TabsContent value="audit">
             <Card>

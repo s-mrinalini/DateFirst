@@ -67,38 +67,41 @@ export function useSocket() {
     }
   }, []);
 
-  const onNewMessage = useCallback((callback) => {
-    if (socketRef.current) {
-      socketRef.current.on('new_message', (data) => {
-        setLastMessage(data);
-        callback(data);
-      });
-    }
-  }, []);
+  // ---- Subscription helpers ----
+  // Each on* registers a listener and returns an unsubscribe function so the
+  // caller can pair it with React's effect cleanup. Without this, every
+  // re-render stacked another listener and incoming messages fired N times.
+  const _subscribe = (event, callback, withLastMessage = false) => {
+    const s = socketRef.current;
+    if (!s) return () => {};
+    const wrapped = (data) => {
+      if (withLastMessage) setLastMessage(data);
+      callback(data);
+    };
+    s.on(event, wrapped);
+    return () => s.off(event, wrapped);
+  };
 
-  const onUserTyping = useCallback((callback) => {
-    if (socketRef.current) {
-      socketRef.current.on('user_typing', callback);
-    }
-  }, []);
-
-  const onDatePlanUpdated = useCallback((callback) => {
-    if (socketRef.current) {
-      socketRef.current.on('date_plan_updated', callback);
-    }
-  }, []);
-
-  const onNewMatch = useCallback((callback) => {
-    if (socketRef.current) {
-      socketRef.current.on('new_match', callback);
-    }
-  }, []);
-
-  const onNotification = useCallback((callback) => {
-    if (socketRef.current) {
-      socketRef.current.on('notification', callback);
-    }
-  }, []);
+  const onNewMessage = useCallback(
+    (callback) => _subscribe('new_message', callback, true),
+    []
+  );
+  const onUserTyping = useCallback(
+    (callback) => _subscribe('user_typing', callback),
+    []
+  );
+  const onDatePlanUpdated = useCallback(
+    (callback) => _subscribe('date_plan_updated', callback),
+    []
+  );
+  const onNewMatch = useCallback(
+    (callback) => _subscribe('new_match', callback),
+    []
+  );
+  const onNotification = useCallback(
+    (callback) => _subscribe('notification', callback),
+    []
+  );
 
   // Cleanup on unmount
   useEffect(() => {

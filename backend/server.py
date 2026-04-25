@@ -27,23 +27,30 @@ import json
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
+# Shared config — JWT secret fail-fast lives here
+from config import (
+    ENV,
+    APP_URL,
+    JWT_SECRET,
+    JWT_ALGORITHM,
+    JWT_EXPIRATION_HOURS,
+    LEGAL_TERMS_VERSION,
+    LEGAL_PRIVACY_VERSION,
+    ALLOWED_IMAGE_MIMES,
+    MAX_UPLOAD_BYTES,
+    MAX_IMAGE_DIMENSION,
+)
+from image_processing import validate_and_normalize_image
+from csam_scanner import scan_image as csam_scan_image
+
 # Import services
 from services import sms_service, email_service, file_storage
 from websocket_handler import sio, broadcast_new_message, broadcast_date_plan_update, broadcast_match, send_notification
-
-# Import from modular packages (for future use)
-# from models import UserCreate, UserLogin, ProfileSetup, etc.
-# from utils import get_city_coords, haversine_distance, check_profanity, etc.
 
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
-
-# JWT Settings
-JWT_SECRET = os.environ.get('JWT_SECRET', 'datefirst-secret-key-change-in-production')
-JWT_ALGORITHM = "HS256"
-JWT_EXPIRATION_HOURS = 24 * 7
 
 # Rate limiting settings
 RATE_LIMITS = {
@@ -178,11 +185,25 @@ def check_profanity(text: str) -> Dict[str, Any]:
 class UserCreate(BaseModel):
     email: EmailStr
     password: str
-    
+    accepted_terms_version: str
+    accepted_privacy_version: str
+
     @validator('password')
     def validate_password(cls, v):
         if len(v) < 8:
             raise ValueError('Password must be at least 8 characters')
+        return v
+
+    @validator('accepted_terms_version')
+    def validate_terms_version(cls, v):
+        if v != LEGAL_TERMS_VERSION:
+            raise ValueError('Outdated Terms version. Please refresh and accept the latest Terms.')
+        return v
+
+    @validator('accepted_privacy_version')
+    def validate_privacy_version(cls, v):
+        if v != LEGAL_PRIVACY_VERSION:
+            raise ValueError('Outdated Privacy Policy version. Please refresh and accept the latest Privacy Policy.')
         return v
 
 class UserLogin(BaseModel):
@@ -191,6 +212,23 @@ class UserLogin(BaseModel):
 
 class EmailVerification(BaseModel):
     code: str
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+    @validator('new_password')
+    def validate_new_password(cls, v):
+        if len(v) < 8:
+            raise ValueError('Password must be at least 8 characters')
+        return v
+
+class DeleteAccountRequest(BaseModel):
+    password: str
+    reason: Optional[str] = None
 
 class FirstDateIdea(BaseModel):
     title: str
@@ -518,13 +556,18 @@ async def signup(data: UserCreate, request: Request):
         "photo_verified": False,
         "phone_verified": False,
         "id_verified": False,
-        "status": "active",  # active, limited, suspended
+        "status": "active",  # active, limited, suspended, pending_deletion
         "shadow_banned": False,
         "is_admin": False,
         "ip_hash": ip_hash,
         "user_agent": user_agent,
         "report_count_24h": 0,
         "last_report_reset": now,
+        # Legal acceptance — required at signup, checked against current versions
+        "accepted_terms_version": data.accepted_terms_version,
+        "accepted_terms_at": now,
+        "accepted_privacy_version": data.accepted_privacy_version,
+        "accepted_privacy_at": now,
         "created_at": now
     }
     
@@ -686,6 +729,146 @@ async def logout(credentials: HTTPAuthorizationCredentials = Depends(security)):
             {"$set": {"is_active": False}}
         )
     return {"message": "Logged out successfully"}
+
+# ==================== PASSWORD RESET ====================
+
+@api_router.post("/auth/forgot-password")
+async def forgot_password(body: ForgotPasswordRequest, request: Request):
+    """Request a password reset email. Always returns 200 to avoid leaking which emails are registered."""
+    user = await db.users.find_one({"email": body.email.lower()}, {"_id": 0})
+    if user:
+        token = secrets.token_urlsafe(32)
+        ip_hash = hash_ip(request.client.host) if request.client else None
+        await db.password_reset_tokens.insert_one({
+            "id": str(uuid.uuid4()),
+            "token": token,
+            "user_id": user["id"],
+            "expires_at": datetime.now(timezone.utc) + timedelta(minutes=30),
+            "used": False,
+            "ip_hash": ip_hash,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+        reset_url = f"{APP_URL}/reset-password/{token}"
+        result = await email_service.send_password_reset_email(user["email"], reset_url)
+        logger.info("Password reset email sent to %s: %s", user["email"], result.get("mock"))
+    return {"message": "If that email is registered, a reset link has been sent."}
+
+
+@api_router.post("/auth/reset-password")
+async def reset_password(body: ResetPasswordRequest):
+    """Consume a reset token and set a new password."""
+    record = await db.password_reset_tokens.find_one({"token": body.token, "used": False})
+    if not record:
+        raise HTTPException(status_code=400, detail="Invalid or expired token.")
+    expires = record.get("expires_at")
+    # Tokens written as datetime; Mongo stores as BSON date (motor decodes as datetime).
+    if isinstance(expires, str):
+        expires = datetime.fromisoformat(expires)
+    if expires and expires.tzinfo is None:
+        expires = expires.replace(tzinfo=timezone.utc)
+    if not expires or expires < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="Invalid or expired token.")
+
+    await db.users.update_one(
+        {"id": record["user_id"]},
+        {"$set": {"password_hash": hash_password(body.new_password)}},
+    )
+    await db.password_reset_tokens.update_one(
+        {"token": body.token}, {"$set": {"used": True, "used_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    # Invalidate every active session — force re-login everywhere
+    await db.sessions.update_many({"user_id": record["user_id"]}, {"$set": {"is_active": False}})
+    return {"message": "Password reset successfully. Please sign in."}
+
+
+# ==================== GDPR: EXPORT & DELETE ====================
+
+@api_router.post("/auth/export-data")
+async def export_my_data(current_user: dict = Depends(get_current_user)):
+    """Return everything we store about the requester. JSON; the client can save it."""
+    uid = current_user["id"]
+    safe_user = {k: v for k, v in current_user.items() if k != "password_hash"}
+    payload = {
+        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "user": safe_user,
+        "profile": await db.profiles.find_one({"user_id": uid}, {"_id": 0}),
+        "matches": await db.matches.find(
+            {"$or": [{"user1_id": uid}, {"user2_id": uid}]}, {"_id": 0}
+        ).to_list(1000),
+        "likes_given": await db.likes.find({"liker_id": uid}, {"_id": 0}).to_list(5000),
+        "passes_given": await db.passes.find({"passer_id": uid}, {"_id": 0}).to_list(5000),
+        "messages_sent": await db.chat_messages.find({"sender_id": uid}, {"_id": 0}).to_list(10000),
+        "trusted_contacts": await db.trusted_contacts.find({"user_id": uid}, {"_id": 0}).to_list(10),
+        "safety_checkins": await db.safety_checkins.find({"user_id": uid}, {"_id": 0}).to_list(1000),
+        "reports_filed": await db.reports.find({"reporter_id": uid}, {"_id": 0}).to_list(1000),
+        "feedback_given": await db.date_feedback.find({"reviewer_id": uid}, {"_id": 0}).to_list(1000),
+        "verification_submissions": await db.verification_submissions.find(
+            {"user_id": uid}, {"_id": 0}
+        ).to_list(100),
+        "blocks": await db.blocks.find({"blocker_id": uid}, {"_id": 0}).to_list(1000),
+        "sessions": await db.sessions.find({"user_id": uid}, {"_id": 0}).to_list(100),
+    }
+    return payload
+
+
+@api_router.post("/auth/delete-account")
+async def delete_my_account(body: DeleteAccountRequest, current_user: dict = Depends(get_current_user)):
+    """
+    Soft-delete with 30-day grace.
+    Account is locked, hidden from discovery, and all sessions invalidated.
+    A separate purge job (out of MVP scope) hard-deletes after 30 days.
+    """
+    if not verify_password(body.password, current_user["password_hash"]):
+        raise HTTPException(status_code=401, detail="Password incorrect.")
+    uid = current_user["id"]
+    now = datetime.now(timezone.utc)
+    await db.account_deletions.update_one(
+        {"user_id": uid},
+        {"$set": {
+            "user_id": uid,
+            "requested_at": now.isoformat(),
+            "purge_after": (now + timedelta(days=30)).isoformat(),
+            "reason": body.reason,
+        }},
+        upsert=True,
+    )
+    await db.users.update_one(
+        {"id": uid},
+        {"$set": {"status": "pending_deletion", "shadow_banned": True}},
+    )
+    await db.sessions.update_many({"user_id": uid}, {"$set": {"is_active": False}})
+    return {
+        "message": "Your account is scheduled for deletion in 30 days. Sign in again before then to cancel.",
+        "purge_after": (now + timedelta(days=30)).isoformat(),
+    }
+
+
+# ==================== LEGAL DOCUMENTS ====================
+
+def _read_legal(filename: str) -> str:
+    path = ROOT_DIR / "legal" / filename
+    if not path.exists():
+        return ""
+    return path.read_text(encoding="utf-8")
+
+
+@api_router.get("/legal/terms")
+async def get_terms():
+    return {"version": LEGAL_TERMS_VERSION, "content": _read_legal("terms.md")}
+
+
+@api_router.get("/legal/privacy")
+async def get_privacy():
+    return {"version": LEGAL_PRIVACY_VERSION, "content": _read_legal("privacy.md")}
+
+
+@api_router.get("/legal/versions")
+async def get_legal_versions():
+    """Lightweight endpoint the frontend calls before rendering the signup form."""
+    return {
+        "terms_version": LEGAL_TERMS_VERSION,
+        "privacy_version": LEGAL_PRIVACY_VERSION,
+    }
 
 # ==================== PROFILE ROUTES ====================
 
@@ -1329,35 +1512,59 @@ async def get_thread_feedback(thread_id: str, current_user: dict = Depends(get_c
 
 # ==================== FILE UPLOAD ROUTES ====================
 
+async def _process_image_upload(raw: bytes, user_id: str) -> Dict[str, Any]:
+    """
+    Pipeline for any user-uploaded image:
+      1) magic-byte sniff + Pillow verify
+      2) re-encode to JPEG (strips EXIF/GPS, caps dimensions)
+      3) CSAM scan (fail-closed in production)
+      4) upload to S3/local
+    Returns the storage result. Raises HTTPException on rejection.
+    """
+    if len(raw) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail=f"File too large. Max {MAX_UPLOAD_BYTES // (1024 * 1024)} MB.")
+
+    try:
+        normalized, mime, _ = validate_and_normalize_image(
+            raw, allowed_mimes=ALLOWED_IMAGE_MIMES, max_dim=MAX_IMAGE_DIMENSION
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    scan = await csam_scan_image(normalized, mime=mime, user_id=user_id)
+    if scan.blocked:
+        # Auto-suspend the account; never store the bytes.
+        await db.users.update_one({"id": user_id}, {"$set": {"status": "suspended"}})
+        await db.moderation_actions.insert_one({
+            "id": str(uuid.uuid4()),
+            "user_id": user_id,
+            "action": "csam_auto_block",
+            "scanner": scan.provider,
+            "score": scan.score,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+        logger.error("CSAM block: user_id=%s provider=%s score=%s", user_id, scan.provider, scan.score)
+        raise HTTPException(status_code=451, detail="Upload rejected by safety scan.")
+
+    result = await file_storage.upload_file(normalized, "upload.jpg", "image/jpeg")
+    if not result.get("success"):
+        raise HTTPException(status_code=500, detail=result.get("error", "Upload failed"))
+    return result
+
+
 @api_router.post("/upload/photo")
-async def upload_photo(
-    file: UploadFile = File(...),
-    current_user: dict = Depends(get_current_user)
-):
-    """Upload a photo (profile or verification)"""
-    # Validate file type
-    allowed_types = ['image/jpeg', 'image/png', 'image/webp']
-    if file.content_type not in allowed_types:
-        raise HTTPException(status_code=400, detail="Only JPEG, PNG, and WebP images are allowed")
-    
-    # Validate file size (max 5MB)
-    content = await file.read()
-    if len(content) > 5 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="File too large. Maximum 5MB allowed")
-    
-    # Upload using file storage service
-    result = await file_storage.upload_file(content, file.filename, file.content_type)
-    
-    if not result['success']:
-        raise HTTPException(status_code=500, detail=result.get('error', 'Upload failed'))
-    
+async def upload_photo(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
+    """Upload a profile photo. Validates, strips EXIF, scans, and stores."""
+    raw = await file.read()
+    result = await _process_image_upload(raw, current_user["id"])
     return {
         "success": True,
-        "url": result['url'],
-        "filename": result['filename'],
-        "size": result['size'],
-        "mock": result.get('mock', False)
+        "url": result["url"],
+        "filename": result["filename"],
+        "size": result["size"],
+        "mock": result.get("mock", False),
     }
+
 
 @api_router.post("/verification/photo/upload")
 async def upload_verification_photo(
@@ -1365,11 +1572,10 @@ async def upload_verification_photo(
     selfie: UploadFile = File(...),
     current_user: dict = Depends(get_current_user)
 ):
-    """Upload photo for verification with proper file storage"""
+    """Upload selfie for photo verification. Same hardening as /upload/photo."""
     if current_user.get('photo_verified'):
         raise HTTPException(status_code=400, detail="Already photo verified")
-    
-    # Check for pending submission
+
     existing = await db.verification_submissions.find_one({
         "user_id": current_user['id'],
         "type": "photo",
@@ -1377,21 +1583,10 @@ async def upload_verification_photo(
     })
     if existing:
         raise HTTPException(status_code=400, detail="You have a pending verification. Please wait for review.")
-    
-    # Validate file
-    allowed_types = ['image/jpeg', 'image/png', 'image/webp']
-    if selfie.content_type not in allowed_types:
-        raise HTTPException(status_code=400, detail="Only JPEG, PNG, and WebP images are allowed")
-    
-    content = await selfie.read()
-    if len(content) > 5 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="File too large. Maximum 5MB allowed")
-    
-    # Upload file
-    upload_result = await file_storage.upload_file(content, selfie.filename, selfie.content_type)
-    if not upload_result['success']:
-        raise HTTPException(status_code=500, detail="Failed to upload file")
-    
+
+    raw = await selfie.read()
+    upload_result = await _process_image_upload(raw, current_user["id"])
+
     now = datetime.now(timezone.utc).isoformat()
     submission = {
         "id": str(uuid.uuid4()),
@@ -1406,7 +1601,7 @@ async def upload_verification_photo(
         "created_at": now
     }
     await db.verification_submissions.insert_one(submission)
-    
+
     return {
         "message": "Photo verification submitted. You'll be notified once reviewed.",
         "submission_id": submission['id'],
@@ -2859,13 +3054,72 @@ async def health():
 # Include the router
 app.include_router(api_router)
 
+# ---------------- CORS — explicit origins only ----------------
+_cors_raw = os.environ.get('CORS_ORIGINS', '').strip()
+if not _cors_raw:
+    if ENV == 'production':
+        raise RuntimeError("CORS_ORIGINS must be set in production (comma-separated origins).")
+    _cors_raw = "http://localhost:3000,http://127.0.0.1:3000"
+    logger.warning("CORS_ORIGINS unset — using localhost defaults for dev.")
+ALLOWED_ORIGINS = [o.strip() for o in _cors_raw.split(',') if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
+    max_age=600,
 )
+
+# ---------------- Security headers ----------------
+@app.middleware("http")
+async def security_headers_middleware(request: Request, call_next):
+    response = await call_next(request)
+    if ENV == 'production':
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "geolocation=(self), camera=(self), microphone=()"
+    # Tight CSP for API responses; the SPA hosting layer should set its own CSP.
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'none'; frame-ancestors 'none'; base-uri 'none'"
+    )
+    return response
+
+
+# ---------------- Startup: ensure indexes ----------------
+@app.on_event("startup")
+async def setup_indexes():
+    """Create MongoDB indexes idempotently. Safe to run on every boot."""
+    await db.users.create_index("email", unique=True)
+    await db.users.create_index("status")
+    await db.profiles.create_index("user_id", unique=True)
+    await db.profiles.create_index([("gender", 1), ("shadow_banned", 1)])
+    await db.likes.create_index([("liker_id", 1), ("liked_id", 1)], unique=True)
+    await db.likes.create_index([("liked_id", 1), ("created_at", -1)])
+    await db.passes.create_index([("passer_id", 1), ("passed_user_id", 1)], unique=True)
+    await db.matches.create_index([("user1_id", 1), ("user2_id", 1)], unique=True)
+    await db.chat_threads.create_index([("user1_id", 1), ("user2_id", 1)])
+    await db.chat_messages.create_index([("thread_id", 1), ("created_at", -1)])
+    await db.blocks.create_index([("blocker_id", 1), ("blocked_id", 1)], unique=True)
+    await db.reports.create_index("reported_user_id")
+    await db.sessions.create_index([("user_id", 1), ("is_active", 1)])
+    # Auto-expire rate-limit events after 24h — MongoDB TTL keeps the collection small.
+    await db.rate_limit_events.create_index(
+        [("user_id", 1), ("action", 1), ("timestamp", 1)],
+        expireAfterSeconds=86400,
+    )
+    # Reset tokens TTL — MongoDB purges the doc when expires_at passes.
+    await db.password_reset_tokens.create_index("token", unique=True)
+    await db.password_reset_tokens.create_index("expires_at", expireAfterSeconds=0)
+    await db.account_deletions.create_index("user_id", unique=True)
+    await db.verification_submissions.create_index([("user_id", 1), ("status", 1)])
+    await db.trusted_contacts.create_index("user_id")
+    await db.safety_checkins.create_index([("user_id", 1), ("status", 1)])
+    logger.info("MongoDB indexes ensured.")
+
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

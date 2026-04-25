@@ -86,43 +86,53 @@ export default function ChatPage() {
     }
   }, [isConnected, threadId, joinThread]);
 
-  // Listen for new messages
+  // Listen for socket events. Each on* returns an unsubscribe — without
+  // pairing them in cleanup, listeners stacked on every re-render and
+  // incoming messages fired N times.
   useEffect(() => {
-    onNewMessage((data) => {
-      if (data.thread_id === threadId) {
-        setMessages(prev => {
-          // Avoid duplicates
-          if (prev.some(m => m.id === data.message.id)) {
-            return prev;
-          }
-          return [...prev, data.message];
-        });
-        scrollToBottom();
-      }
+    const offMessage = onNewMessage((data) => {
+      if (data.thread_id !== threadId) return;
+      setMessages(prev =>
+        prev.some(m => m.id === data.message.id) ? prev : [...prev, data.message]
+      );
     });
 
-    onUserTyping((data) => {
-      if (data.thread_id === threadId && data.user_id !== user?.id) {
-        setIsTyping(data.is_typing);
-        // Auto-clear typing indicator after 3 seconds
-        if (data.is_typing) {
-          setTimeout(() => setIsTyping(false), 3000);
-        }
-      }
+    const offTyping = onUserTyping((data) => {
+      if (data.thread_id !== threadId || data.user_id === user?.id) return;
+      setIsTyping(!!data.is_typing);
     });
 
-    onDatePlanUpdated((data) => {
-      if (data.thread_id === threadId) {
-        setDatePlan(data.date_plan || {});
-        setThread(prev => prev ? { ...prev, date_plan: data.date_plan } : null);
-      }
+    const offPlan = onDatePlanUpdated((data) => {
+      if (data.thread_id !== threadId) return;
+      setDatePlan(data.date_plan || {});
+      setThread(prev => prev ? { ...prev, date_plan: data.date_plan } : null);
     });
+
+    return () => {
+      offMessage?.();
+      offTyping?.();
+      offPlan?.();
+    };
   }, [threadId, onNewMessage, onUserTyping, onDatePlanUpdated, user?.id]);
 
-  // Handle typing indicator
+  // Debounced typing — fire once on first keystroke, send `false` after 2s idle.
+  const typingTimerRef = useRef(null);
+  const isTypingSentRef = useRef(false);
   const handleTyping = useCallback(() => {
-    sendTyping(threadId, true);
+    if (!isTypingSentRef.current) {
+      sendTyping(threadId, true);
+      isTypingSentRef.current = true;
+    }
+    if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+    typingTimerRef.current = setTimeout(() => {
+      sendTyping(threadId, false);
+      isTypingSentRef.current = false;
+    }, 2000);
   }, [threadId, sendTyping]);
+
+  useEffect(() => () => {
+    if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+  }, []);
 
   useEffect(() => {
     fetchData();

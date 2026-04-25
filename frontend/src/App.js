@@ -5,6 +5,8 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import AuthPage from './pages/AuthPage';
 import OnboardingPage from './pages/OnboardingPage';
 import MainApp from './pages/MainApp';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 import './App.css';
 
 const ProtectedRoute = ({ children }) => {
@@ -80,7 +82,10 @@ function AppRoutes() {
           <AuthPage />
         </PublicRoute>
       } />
-      
+
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
+
       <Route path="/onboarding" element={
         <OnboardingRoute>
           <OnboardingPage />

@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'sonner';
-import { ArrowLeft, Shield, Ban, LogOut, Trash2, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Shield, Ban, LogOut, Trash2, ChevronRight, Download } from 'lucide-react';
 import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,10 +22,15 @@ const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 export default function SettingsPage() {
   const navigate = useNavigate();
-  const { logout } = useAuth();
+  const { logout, exportMyData, deleteMyAccount } = useAuth();
   const [blockedUsers, setBlockedUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [unblockId, setUnblockId] = useState(null);
+  const [exporting, setExporting] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteReason, setDeleteReason] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     fetchBlocked();
@@ -56,6 +63,47 @@ export default function SettingsPage() {
   const handleLogout = () => {
     logout();
     navigate('/auth');
+  };
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const data = await exportMyData();
+      // Trigger a JSON file download in the browser.
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const stamp = new Date().toISOString().slice(0, 10);
+      a.href = url;
+      a.download = `datefirst-export-${stamp}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success('Data export downloaded');
+    } catch (error) {
+      toast.error('Could not export data. Try again.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deletePassword) {
+      toast.error('Enter your password to confirm');
+      return;
+    }
+    setDeleting(true);
+    try {
+      await deleteMyAccount(deletePassword, deleteReason);
+      toast.success('Account scheduled for deletion');
+      logout();
+      navigate('/auth');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Could not delete account');
+    } finally {
+      setDeleting(false);
+    }
   };
 
   return (
@@ -112,6 +160,25 @@ export default function SettingsPage() {
         )}
       </div>
 
+      {/* Privacy & Data */}
+      <div className="bg-white rounded-2xl shadow-sm overflow-hidden mb-6">
+        <button
+          onClick={handleExport}
+          disabled={exporting}
+          className="w-full p-4 flex items-center justify-between hover:bg-stone-50 transition-colors disabled:opacity-50"
+          data-testid="export-data-btn"
+        >
+          <div className="flex items-center gap-3">
+            <Download className="w-5 h-5 text-[#2A9D8F]" />
+            <div className="text-left">
+              <div className="text-[#1C1917]">Export my data</div>
+              <div className="text-xs text-[#57534E]">Download everything we have about you (JSON)</div>
+            </div>
+          </div>
+          <ChevronRight className="w-5 h-5 text-[#A8A29E]" />
+        </button>
+      </div>
+
       {/* Account Actions */}
       <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
         <button
@@ -128,6 +195,7 @@ export default function SettingsPage() {
 
         <div className="border-t border-stone-100">
           <button
+            onClick={() => setDeleteOpen(true)}
             className="w-full p-4 flex items-center justify-between hover:bg-red-50 transition-colors"
             data-testid="delete-account-btn"
           >
@@ -157,11 +225,60 @@ export default function SettingsPage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel className="rounded-full">Cancel</AlertDialogCancel>
-            <AlertDialogAction 
+            <AlertDialogAction
               onClick={handleUnblock}
               className="rounded-full"
             >
               Unblock
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Account Dialog */}
+      <AlertDialog open={deleteOpen} onOpenChange={(open) => {
+        setDeleteOpen(open);
+        if (!open) { setDeletePassword(''); setDeleteReason(''); }
+      }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete your account?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Your account will be hidden immediately and permanently deleted after 30 days.
+              Sign in again before then to cancel. Enter your password to confirm.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-3 my-4">
+            <div>
+              <Label className="text-sm font-medium">Password</Label>
+              <Input
+                type="password"
+                value={deletePassword}
+                onChange={(e) => setDeletePassword(e.target.value)}
+                className="mt-1.5 rounded-xl"
+                data-testid="delete-password"
+              />
+            </div>
+            <div>
+              <Label className="text-sm font-medium">Reason (optional)</Label>
+              <Input
+                value={deleteReason}
+                onChange={(e) => setDeleteReason(e.target.value)}
+                className="mt-1.5 rounded-xl"
+                placeholder="Help us improve..."
+                data-testid="delete-reason"
+              />
+            </div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-full">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={deleting || !deletePassword}
+              className="rounded-full bg-red-600 hover:bg-red-700"
+              data-testid="delete-confirm"
+            >
+              {deleting ? 'Deleting...' : 'Delete account'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

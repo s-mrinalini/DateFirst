@@ -48,15 +48,43 @@ export const AuthProvider = ({ children }) => {
     return response.data;
   };
 
-  const signup = async (email, password) => {
-    const response = await axios.post(`${API}/auth/signup`, { email, password });
+  const signup = async (email, password, acceptedTermsVersion, acceptedPrivacyVersion) => {
+    const response = await axios.post(`${API}/auth/signup`, {
+      email,
+      password,
+      accepted_terms_version: acceptedTermsVersion,
+      accepted_privacy_version: acceptedPrivacyVersion,
+    });
     const { token: newToken, user: userData } = response.data;
-    
+
     localStorage.setItem('token', newToken);
     axios.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
     setToken(newToken);
     setUser(userData);
-    
+
+    return response.data;
+  };
+
+  const forgotPassword = async (email) => {
+    const response = await axios.post(`${API}/auth/forgot-password`, { email });
+    return response.data;
+  };
+
+  const resetPassword = async (token, newPassword) => {
+    const response = await axios.post(`${API}/auth/reset-password`, {
+      token,
+      new_password: newPassword,
+    });
+    return response.data;
+  };
+
+  const exportMyData = async () => {
+    const response = await axios.post(`${API}/auth/export-data`);
+    return response.data;
+  };
+
+  const deleteMyAccount = async (password, reason) => {
+    const response = await axios.post(`${API}/auth/delete-account`, { password, reason });
     return response.data;
   };
 
@@ -119,6 +147,10 @@ export const AuthProvider = ({ children }) => {
     signup,
     verifyEmail,
     resendVerification,
+    forgotPassword,
+    resetPassword,
+    exportMyData,
+    deleteMyAccount,
     logout,
     logoutAllDevices,
     setupProfile,

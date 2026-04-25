@@ -10,14 +10,23 @@ from datetime import datetime, timezone
 from typing import Dict, Set
 import uuid
 
+from config import JWT_SECRET, ENV
+
 logger = logging.getLogger(__name__)
 
-JWT_SECRET = os.environ.get('JWT_SECRET', 'datefirst-secret-key-change-in-production')
+# Socket.IO CORS — explicit origins (mirrors HTTP CORS)
+_cors_raw = os.environ.get("CORS_ORIGINS", "").strip()
+if not _cors_raw:
+    if ENV == "production":
+        raise RuntimeError("CORS_ORIGINS must be set in production for Socket.IO.")
+    _cors_origins = ["http://localhost:3000", "http://127.0.0.1:3000"]
+else:
+    _cors_origins = [o.strip() for o in _cors_raw.split(",") if o.strip()]
 
 # Create Socket.IO server
 sio = socketio.AsyncServer(
     async_mode='asgi',
-    cors_allowed_origins='*',
+    cors_allowed_origins=_cors_origins,
     logger=False,
     engineio_logger=False
 )

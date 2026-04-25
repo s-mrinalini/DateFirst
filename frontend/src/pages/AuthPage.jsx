@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import axios from 'axios';
 import { toast } from 'sonner';
 import { Heart, Mail, Lock, ArrowRight, Eye, EyeOff } from 'lucide-react';
 import { Input } from '../components/ui/input';
@@ -7,22 +8,37 @@ import { Button } from '../components/ui/button';
 import { Label } from '../components/ui/label';
 import { useAuth } from '../context/AuthContext';
 
+const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+
 export default function AuthPage() {
   const navigate = useNavigate();
   const { login, signup } = useAuth();
-  
+
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [errors, setErrors] = useState({});
+  const [acceptedLegal, setAcceptedLegal] = useState(false);
+  const [legalVersions, setLegalVersions] = useState(null);
+
+  // Fetch the current Terms/Privacy versions so signup uses live values.
+  useEffect(() => {
+    if (isLogin) return;
+    let cancelled = false;
+    axios.get(`${API}/legal/versions`)
+      .then(res => { if (!cancelled) setLegalVersions(res.data); })
+      .catch(() => {/* surface only at submit-time */});
+    return () => { cancelled = true; };
+  }, [isLogin]);
 
   const validateForm = () => {
     const newErrors = {};
     if (!formData.email) newErrors.email = 'Email is required';
     else if (!/\S+@\S+\.\S+/.test(formData.email)) newErrors.email = 'Invalid email';
     if (!formData.password) newErrors.password = 'Password is required';
-    else if (formData.password.length < 6) newErrors.password = 'Min 6 characters';
+    else if (formData.password.length < 8) newErrors.password = 'Min 8 characters';
+    if (!isLogin && !acceptedLegal) newErrors.legal = 'Please accept the Terms and Privacy Policy';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -30,7 +46,7 @@ export default function AuthPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validateForm()) return;
-    
+
     setLoading(true);
     try {
       if (isLogin) {
@@ -38,7 +54,16 @@ export default function AuthPage() {
         toast.success('Welcome back!');
         navigate(result.user.profile_complete ? '/' : '/onboarding');
       } else {
-        await signup(formData.email, formData.password);
+        if (!legalVersions) {
+          toast.error('Could not load legal versions. Refresh and try again.');
+          return;
+        }
+        await signup(
+          formData.email,
+          formData.password,
+          legalVersions.terms_version,
+          legalVersions.privacy_version,
+        );
         toast.success('Account created!');
         navigate('/onboarding');
       }
@@ -113,6 +138,39 @@ export default function AuthPage() {
               </div>
               {errors.password && <p className="text-red-500 text-sm mt-1">{errors.password}</p>}
             </div>
+
+            {isLogin && (
+              <div className="text-right -mt-2">
+                <Link
+                  to="/forgot-password"
+                  className="text-sm text-[#E76F51] font-medium hover:underline"
+                  data-testid="forgot-password-link"
+                >
+                  Forgot password?
+                </Link>
+              </div>
+            )}
+
+            {!isLogin && (
+              <div>
+                <label className="flex items-start gap-2 text-sm text-[#57534E] cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={acceptedLegal}
+                    onChange={(e) => setAcceptedLegal(e.target.checked)}
+                    className="mt-1 w-4 h-4 rounded accent-[#E76F51]"
+                    data-testid="accept-legal"
+                  />
+                  <span>
+                    I'm 18 or older and I agree to the{' '}
+                    <a href="/legal/terms" target="_blank" rel="noreferrer" className="text-[#E76F51] hover:underline">Terms</a>
+                    {' '}and{' '}
+                    <a href="/legal/privacy" target="_blank" rel="noreferrer" className="text-[#E76F51] hover:underline">Privacy Policy</a>.
+                  </span>
+                </label>
+                {errors.legal && <p className="text-red-500 text-sm mt-1">{errors.legal}</p>}
+              </div>
+            )}
 
             <Button
               type="submit"

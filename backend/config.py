@@ -8,9 +8,13 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-ENV = os.environ.get("ENV", "development").lower()
+# ENV is left unset deliberately so deployments without an explicit ENV value
+# get treated as production for safety checks (fail-fast on weak secrets).
+# Local devs should set ENV=development in .env to opt in to the dev fallback.
+ENV = os.environ.get("ENV", "").lower()
 APP_URL = os.environ.get("APP_URL", "http://localhost:3000").rstrip("/")
 
+_DEV_ENVS = {"development", "dev", "local"}
 _WEAK_DEFAULTS = {
     "",
     "datefirst-secret-key-change-in-production",
@@ -19,20 +23,35 @@ _WEAK_DEFAULTS = {
 }
 
 
+def is_dev() -> bool:
+    return ENV in _DEV_ENVS
+
+
 def _resolve_jwt_secret() -> str:
     raw = os.environ.get("JWT_SECRET", "")
-    if raw in _WEAK_DEFAULTS or len(raw) < 32:
-        if ENV == "production":
-            raise RuntimeError(
-                "JWT_SECRET is missing or weak. Set a 32+ char random secret. "
-                'Generate: python -c "import secrets; print(secrets.token_urlsafe(48))"'
-            )
+    is_weak = raw in _WEAK_DEFAULTS or len(raw) < 32
+
+    if is_weak and not is_dev():
+        # Anything that's not an explicit dev env (production, staging, test,
+        # or ENV unset) must have a real secret. Refuse to start.
+        raise RuntimeError(
+            "JWT_SECRET is missing or too short (need 32+ chars). "
+            f"Current ENV={ENV!r}. Refusing to start.\n"
+            "Generate a secret:\n"
+            '  python -c "import secrets; print(secrets.token_urlsafe(48))"\n'
+            "Then set JWT_SECRET in your deployment environment "
+            "(e.g. Render → Service → Environment).\n"
+            "For local development, also set ENV=development in your .env."
+        )
+
+    if is_weak:
         logger.warning(
-            "JWT_SECRET is weak — DEV ONLY. Do NOT deploy this way. "
-            "Set JWT_SECRET to a 32+ char value before production."
+            "JWT_SECRET is weak — DEV ONLY (ENV=%s). Do NOT deploy this way.",
+            ENV,
         )
         if not raw:
             raw = "dev-only-insecure-" + secrets.token_urlsafe(32)
+
     return raw
 
 

@@ -18,6 +18,7 @@ import os
 import logging
 import uuid
 import asyncio
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 import aiofiles
@@ -221,15 +222,17 @@ class FileStorageService:
 
     SIGNED_URL_TTL = 7 * 24 * 3600  # 7 days
 
-    def __init__(self, local_upload_dir: str = "/app/uploads"):
+    def __init__(self, local_upload_dir: str | None = None):
         self.access_key = os.environ.get("AWS_ACCESS_KEY_ID")
         self.secret_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
         self.bucket = os.environ.get("AWS_S3_BUCKET")
         self.region = os.environ.get("AWS_REGION", "us-east-1")
         self.is_mock = not all([self.access_key, self.secret_key, self.bucket])
 
-        self.local_dir = Path(local_upload_dir)
-        self.local_dir.mkdir(parents=True, exist_ok=True)
+        # Resolve a writable local directory. Order: explicit arg → UPLOAD_DIR
+        # env → ./uploads relative to cwd → tempdir. Hardcoding /app/uploads
+        # broke Render where the worker has no write access there.
+        self.local_dir = self._resolve_local_dir(local_upload_dir)
 
         if not self.is_mock:
             try:
@@ -246,6 +249,40 @@ class FileStorageService:
                 self.is_mock = True
         else:
             logger.info("File storage running in LOCAL mode (no AWS env vars).")
+
+    @staticmethod
+    def _resolve_local_dir(explicit: str | None) -> Path:
+        """Pick the first writable directory from a list of candidates."""
+        candidates: list[Path] = []
+        if explicit:
+            candidates.append(Path(explicit))
+        env_dir = os.environ.get("UPLOAD_DIR")
+        if env_dir:
+            candidates.append(Path(env_dir))
+        # Default: ./uploads next to the running process — works on Render,
+        # Heroku, fly.io, and local dev without any config.
+        candidates.append(Path.cwd() / "uploads")
+        # Last-resort fallback: OS tempdir (always writable).
+        candidates.append(Path(tempfile.gettempdir()) / "datefirst-uploads")
+
+        attempted: list[str] = []
+        for path in candidates:
+            attempted.append(str(path))
+            try:
+                path.mkdir(parents=True, exist_ok=True)
+                # mkdir can succeed on a read-only mount; verify we can actually write.
+                probe = path / ".write_probe"
+                probe.write_text("ok")
+                probe.unlink()
+                logger.info("Local upload directory: %s", path)
+                return path
+            except (PermissionError, OSError) as e:
+                logger.warning("Upload dir %s unusable (%s); trying next.", path, e)
+
+        raise RuntimeError(
+            f"No writable upload directory found. Tried: {attempted}. "
+            f"Set UPLOAD_DIR to a writable path."
+        )
 
     def _generate_signed_url_sync(self, key: str) -> str:
         return self.s3_client.generate_presigned_url(

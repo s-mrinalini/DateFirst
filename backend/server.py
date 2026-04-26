@@ -3107,11 +3107,14 @@ async def setup_indexes():
     await db.blocks.create_index([("blocker_id", 1), ("blocked_id", 1)], unique=True)
     await db.reports.create_index("reported_user_id")
     await db.sessions.create_index([("user_id", 1), ("is_active", 1)])
-    # Auto-expire rate-limit events after 24h — MongoDB TTL keeps the collection small.
+    # Rate-limit events: compound index for the (user_id, action, time-window)
+    # query that the rate-limiter does, plus a separate single-field TTL index
+    # so MongoDB auto-purges old events after 24h. TTL on a compound index is
+    # not supported by MongoDB.
     await db.rate_limit_events.create_index(
         [("user_id", 1), ("action", 1), ("timestamp", 1)],
-        expireAfterSeconds=86400,
     )
+    await db.rate_limit_events.create_index("timestamp", expireAfterSeconds=86400)
     # Reset tokens TTL — MongoDB purges the doc when expires_at passes.
     await db.password_reset_tokens.create_index("token", unique=True)
     await db.password_reset_tokens.create_index("expires_at", expireAfterSeconds=0)

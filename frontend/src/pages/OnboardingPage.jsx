@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { 
-  Heart, Camera, MapPin, Calendar, User, Ruler, 
-  FileText, Coffee, ArrowLeft, ArrowRight, Check, Sparkles
+import axios from 'axios';
+import {
+  Heart, Camera, MapPin, Calendar, User, Ruler,
+  FileText, Coffee, ArrowLeft, ArrowRight, Check, Sparkles, Mail, Upload
 } from 'lucide-react';
 import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
@@ -11,6 +12,10 @@ import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
 import { Slider } from '../components/ui/slider';
 import { useAuth } from '../context/AuthContext';
+
+const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+const ALLOWED_PHOTO_MIMES = ['image/jpeg', 'image/png', 'image/webp'];
 
 const DATE_TAGS = [
   'coffee', 'dinner', 'brunch', 'drinks', 'outdoors', 'hiking',
@@ -32,10 +37,19 @@ const STEPS = [
 
 export default function OnboardingPage() {
   const navigate = useNavigate();
-  const { setupProfile } = useAuth();
+  const { user, setupProfile, verifyEmail, resendVerification } = useAuth();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
-  
+
+  // Email verification gate state
+  const [otpCode, setOtpCode] = useState('');
+  const [verifying, setVerifying] = useState(false);
+  const [resending, setResending] = useState(false);
+
+  // Photo upload state
+  const fileInputRef = useRef(null);
+  const [photoUploading, setPhotoUploading] = useState(false);
+
   const [formData, setFormData] = useState({
     first_name: '',
     main_photo: '',
@@ -54,6 +68,75 @@ export default function OnboardingPage() {
       city: ''
     }
   });
+
+  const handleVerify = async () => {
+    if (otpCode.length !== 6) {
+      toast.error('Enter the 6-digit code');
+      return;
+    }
+    setVerifying(true);
+    try {
+      await verifyEmail(otpCode);
+      toast.success('Email verified!');
+      // AuthContext updates user.email_verified; the gate falls through automatically.
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Invalid code');
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  const handleResend = async () => {
+    setResending(true);
+    try {
+      await resendVerification();
+      toast.success('New code sent — check your email or backend logs.');
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Could not resend');
+    } finally {
+      setResending(false);
+    }
+  };
+
+  const handlePhotoSelect = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > MAX_PHOTO_BYTES) {
+      toast.error('Photo must be under 5MB');
+      e.target.value = '';
+      return;
+    }
+    if (!ALLOWED_PHOTO_MIMES.includes(file.type)) {
+      toast.error('Photo must be JPEG, PNG, or WebP');
+      e.target.value = '';
+      return;
+    }
+
+    // Show local preview immediately while the upload runs.
+    const localPreview = URL.createObjectURL(file);
+    updateField('main_photo', localPreview);
+
+    setPhotoUploading(true);
+    const fd = new FormData();
+    fd.append('file', file);
+    try {
+      const response = await axios.post(`${API}/upload/photo`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      // Replace local preview URL with the real uploaded URL.
+      updateField('main_photo', response.data.url);
+      URL.revokeObjectURL(localPreview);
+      toast.success('Photo uploaded');
+    } catch (err) {
+      URL.revokeObjectURL(localPreview);
+      updateField('main_photo', '');
+      toast.error(err.response?.data?.detail || 'Upload failed');
+    } finally {
+      setPhotoUploading(false);
+      e.target.value = '';
+    }
+  };
 
   const updateField = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -93,7 +176,8 @@ export default function OnboardingPage() {
     switch (step) {
       case 1:
         if (!formData.first_name.trim()) { toast.error('Enter your name'); return false; }
-        if (!formData.main_photo.trim()) { toast.error('Add a photo URL'); return false; }
+        if (!formData.main_photo.trim()) { toast.error('Add your photo'); return false; }
+        if (photoUploading) { toast.error('Photo is still uploading'); return false; }
         return true;
       case 2:
         if (!formData.city.trim()) { toast.error('Enter your city'); return false; }
@@ -152,11 +236,70 @@ export default function OnboardingPage() {
 
   const progress = (step / 8) * 100;
 
+  // Email verification gate — must come before profile setup. Backend rejects
+  // /profile/setup until the user verifies their email.
+  if (!user?.email_verified) {
+    return (
+      <div className="min-h-screen bg-[#FDFCF8] flex flex-col">
+        <div className="p-4 flex items-center gap-2">
+          <Heart className="w-6 h-6 text-[#E76F51]" fill="#E76F51" />
+          <span className="font-bold text-lg" style={{ fontFamily: 'Syne, sans-serif' }}>DateFirst</span>
+        </div>
+        <div className="flex-1 flex items-center justify-center p-6">
+          <div className="w-full max-w-md">
+            <div className="text-center mb-8">
+              <Mail className="w-12 h-12 text-[#E76F51] mx-auto mb-4" />
+              <h2 className="text-2xl font-bold text-[#1C1917]" style={{ fontFamily: 'Syne, sans-serif' }}>
+                Verify your email
+              </h2>
+              <p className="text-[#57534E] mt-2">
+                We sent a 6-digit code to <strong>{user?.email}</strong>
+              </p>
+              <p className="text-xs text-[#A8A29E] mt-3 px-4">
+                Check your email for the verification code. If testing locally,
+                check the backend logs for the OTP.
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <Input
+                placeholder="123456"
+                inputMode="numeric"
+                maxLength={6}
+                value={otpCode}
+                onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                className="text-center text-2xl tracking-[0.5em] h-14 rounded-xl"
+                data-testid="verify-otp-input"
+              />
+              <Button
+                onClick={handleVerify}
+                disabled={verifying || otpCode.length !== 6}
+                className="w-full h-12 bg-[#E76F51] hover:bg-[#D65D40] rounded-xl text-base font-semibold"
+                data-testid="verify-submit"
+              >
+                {verifying ? 'Verifying...' : 'Verify email'}
+              </Button>
+              <button
+                type="button"
+                onClick={handleResend}
+                disabled={resending}
+                className="w-full text-sm text-[#57534E] hover:text-[#E76F51] disabled:opacity-50 py-2"
+                data-testid="verify-resend"
+              >
+                {resending ? 'Sending...' : "Didn't get it? Resend code"}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#FDFCF8] flex flex-col">
       {/* Progress Bar */}
       <div className="h-1 bg-stone-200">
-        <div 
+        <div
           className="h-full bg-gradient-to-r from-[#E76F51] to-[#E9C46A] transition-all duration-300"
           style={{ width: `${progress}%` }}
         />
@@ -197,24 +340,51 @@ export default function OnboardingPage() {
               </div>
               
               <div>
-                <Label>Profile Photo URL</Label>
-                <Input
-                  placeholder="https://example.com/photo.jpg"
-                  value={formData.main_photo}
-                  onChange={(e) => updateField('main_photo', e.target.value)}
-                  className="mt-1.5 rounded-xl h-12"
-                  data-testid="onboard-photo"
+                <Label>Profile Photo</Label>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={handlePhotoSelect}
+                  data-testid="onboard-photo-file"
                 />
-                {formData.main_photo && (
-                  <div className="mt-3 flex justify-center">
-                    <img 
-                      src={formData.main_photo} 
-                      alt="Preview" 
-                      className="w-24 h-24 rounded-full object-cover border-4 border-white shadow-lg"
-                      onError={(e) => e.target.style.display = 'none'}
-                    />
-                  </div>
-                )}
+                <div className="mt-3 flex flex-col items-center gap-3">
+                  {formData.main_photo ? (
+                    <div className="relative">
+                      <img
+                        src={formData.main_photo}
+                        alt="Preview"
+                        className="w-32 h-32 rounded-full object-cover border-4 border-white shadow-lg"
+                      />
+                      {photoUploading && (
+                        <div className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center">
+                          <span className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="w-32 h-32 rounded-full bg-stone-100 flex items-center justify-center border-2 border-dashed border-stone-300">
+                      <Camera className="w-10 h-10 text-stone-400" />
+                    </div>
+                  )}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={photoUploading}
+                    className="rounded-full"
+                    data-testid="onboard-photo-button"
+                  >
+                    <Upload className="w-4 h-4 mr-2" />
+                    {photoUploading
+                      ? 'Uploading...'
+                      : formData.main_photo
+                        ? 'Replace photo'
+                        : 'Choose photo'}
+                  </Button>
+                  <p className="text-xs text-[#A8A29E]">JPEG, PNG, or WebP — up to 5MB</p>
+                </div>
               </div>
             </div>
           )}

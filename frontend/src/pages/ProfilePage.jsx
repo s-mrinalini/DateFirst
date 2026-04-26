@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
-import { 
-  User, MapPin, Calendar, Ruler, Heart, Settings, 
+import axios from 'axios';
+import {
+  User, MapPin, Calendar, Ruler, Heart, Settings,
   ChevronRight, Edit2, Save, Sparkles, Shield, BadgeCheck,
-  Camera, Phone, Mail, Crown, BookOpen
+  Camera, Phone, Mail, Crown, BookOpen, Upload
 } from 'lucide-react';
 import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
@@ -21,10 +22,45 @@ const DATE_TAGS = [
   'fitness', 'cooking', 'wine', 'adventure', 'chill', 'active'
 ];
 
+const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+const ALLOWED_PHOTO_MIMES = ['image/jpeg', 'image/png', 'image/webp'];
+
 export default function ProfilePage() {
   const { user, profile, updateProfile, logout, badges, emailVerified, photoVerified, phoneVerified } = useAuth();
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(false);
+  const fileInputRef = useRef(null);
+  const [photoUploading, setPhotoUploading] = useState(false);
+
+  const handlePhotoSelect = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > MAX_PHOTO_BYTES) { toast.error('Photo must be under 5MB'); e.target.value = ''; return; }
+    if (!ALLOWED_PHOTO_MIMES.includes(file.type)) { toast.error('Photo must be JPEG, PNG, or WebP'); e.target.value = ''; return; }
+
+    const localPreview = URL.createObjectURL(file);
+    updateField('main_photo', localPreview);
+
+    setPhotoUploading(true);
+    const fd = new FormData();
+    fd.append('file', file);
+    try {
+      const response = await axios.post(`${API}/upload/photo`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      updateField('main_photo', response.data.url);
+      URL.revokeObjectURL(localPreview);
+      toast.success('Photo uploaded');
+    } catch (err) {
+      URL.revokeObjectURL(localPreview);
+      updateField('main_photo', profile?.main_photo || '');
+      toast.error(err.response?.data?.detail || 'Upload failed');
+    } finally {
+      setPhotoUploading(false);
+      e.target.value = '';
+    }
+  };
   
   const [formData, setFormData] = useState({
     first_name: profile?.first_name || '',
@@ -154,12 +190,29 @@ export default function ProfilePage() {
                 />
               </div>
               <div>
-                <Label>Photo URL</Label>
-                <Input
-                  value={formData.main_photo}
-                  onChange={(e) => updateField('main_photo', e.target.value)}
-                  className="mt-1 rounded-xl"
+                <Label>Photo</Label>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={handlePhotoSelect}
+                  data-testid="profile-photo-file"
                 />
+                <div className="mt-1 flex items-center gap-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={photoUploading}
+                    className="rounded-full"
+                    data-testid="profile-photo-button"
+                  >
+                    <Upload className="w-4 h-4 mr-2" />
+                    {photoUploading ? 'Uploading...' : 'Replace photo'}
+                  </Button>
+                  <span className="text-xs text-[#A8A29E]">JPEG, PNG, or WebP — up to 5MB</span>
+                </div>
               </div>
               <div>
                 <Label>City</Label>

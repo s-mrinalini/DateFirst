@@ -7,7 +7,12 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, Optional
 
 class DateFirstV3APITester:
-    def __init__(self, base_url="https://datefirst-chat.preview.emergentagent.com/api"):
+    def __init__(self, base_url=None):
+        # Default to the BACKEND_URL env var, then localhost. Override with a
+        # constructor arg or BACKEND_URL=https://your-render-host.onrender.com.
+        import os
+        if base_url is None:
+            base_url = os.environ.get("BACKEND_URL", "http://localhost:8001").rstrip("/") + "/api"
         self.base_url = base_url
         self.token = None
         self.user_data = None

@@ -590,6 +590,13 @@ async def signup(data: UserCreate, request: Request):
     # Send verification email
     email_result = await email_service.send_verification_email(data.email, verification_code)
     logger.info(f"Email verification sent to {data.email}: {email_result}")
+    if email_result.get('mock'):
+        # SendGrid not configured — surface the OTP loudly so testers can grab it from logs.
+        logger.warning(
+            "\n========================================\n"
+            f"VERIFICATION OTP FOR {data.email}: {verification_code}\n"
+            "========================================"
+        )
     
     return {
         "token": token,
@@ -639,6 +646,12 @@ async def resend_verification(current_user: dict = Depends(get_current_user)):
     # Send verification email
     email_result = await email_service.send_verification_email(current_user['email'], verification_code)
     logger.info(f"Resent verification to {current_user['email']}: {email_result}")
+    if email_result.get('mock'):
+        logger.warning(
+            "\n========================================\n"
+            f"VERIFICATION OTP FOR {current_user['email']}: {verification_code}\n"
+            "========================================"
+        )
     
     return {
         "message": "Verification code sent to your email",

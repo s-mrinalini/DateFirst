@@ -62,9 +62,10 @@ RATE_LIMITS = {
     "profile_edits_per_hour": 10
 }
 
-# Upload settings
-UPLOAD_DIR = Path(os.environ.get('UPLOAD_DIR', '/app/uploads'))
-UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+# Upload directory: reuse the path resolved by FileStorageService so we don't
+# duplicate the candidate-walk fallback. This is also what /upload/photo and
+# /verification/photo/upload write to.
+UPLOAD_DIR = file_storage.local_dir
 
 # Create FastAPI app
 app = FastAPI(title="DateFirst API v3 - Safety Enhanced")

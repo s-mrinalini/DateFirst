@@ -591,7 +591,7 @@ async def signup(data: UserCreate, request: Request):
     email_result = await email_service.send_verification_email(data.email, verification_code)
     logger.info(f"Email verification sent to {data.email}: {email_result}")
     if email_result.get('mock'):
-        # SendGrid not configured — surface the OTP loudly so testers can grab it from logs.
+        # Email provider not configured — surface the OTP loudly so testers can grab it from logs.
         logger.warning(
             "\n========================================\n"
             f"VERIFICATION OTP FOR {data.email}: {verification_code}\n"

@@ -24,7 +24,7 @@
 ## How we share it
 - With other DateFirst users only as your privacy settings allow.
   Pre-match: name + photo + first-date idea. Post-match: full profile.
-- With service providers strictly to operate the service: SendGrid (email),
+- With service providers strictly to operate the service: Resend (email),
   Twilio (SMS), AWS S3 (photo storage), Hive AI / Thorn / PhotoDNA
   (image safety scanning), MongoDB Atlas (database).
 - With law enforcement when required by law (e.g., NCMEC reports for CSAM).

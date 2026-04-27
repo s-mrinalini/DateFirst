@@ -1,16 +1,16 @@
 """
 Service integrations for DateFirst.
 
-These wrap SendGrid (email), Twilio (SMS), and AWS S3 (file storage). Each
+These wrap Resend (email), Twilio (SMS), and AWS S3 (file storage). Each
 service auto-selects between a real provider and a mock based on whether the
 required env vars are present.
 
 Real-provider env vars:
 - TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER
-- SENDGRID_API_KEY, SENDGRID_FROM_EMAIL
+- RESEND_API_KEY, RESEND_FROM_EMAIL
 - AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_S3_BUCKET, AWS_REGION
 
-The SendGrid and Twilio Python SDKs are synchronous; we wrap calls in
+The Resend and Twilio Python SDKs are synchronous; we wrap calls in
 asyncio.to_thread so they don't block the event loop.
 """
 
@@ -89,45 +89,49 @@ class SMSService:
             return {"success": False, "error": str(e)}
 
 
-# ==================== EMAIL SERVICE (SendGrid) ====================
+# ==================== EMAIL SERVICE (Resend) ====================
 
 class EmailService:
     def __init__(self):
-        self.api_key = os.environ.get("SENDGRID_API_KEY")
-        self.from_email = os.environ.get("SENDGRID_FROM_EMAIL", "noreply@datefirst.app")
+        self.api_key = os.environ.get("RESEND_API_KEY")
+        self.from_email = os.environ.get("RESEND_FROM_EMAIL", "onboarding@resend.dev")
         self.is_mock = not self.api_key
 
         if not self.is_mock:
             try:
-                from sendgrid import SendGridAPIClient
-                self.client = SendGridAPIClient(self.api_key)
-                logger.info("SendGrid email service initialized")
+                import resend
+                resend.api_key = self.api_key
+                self._resend = resend
+                logger.info("Resend email service initialized (from=%s)", self.from_email)
             except ImportError:
-                logger.warning("SendGrid package not installed; falling back to mock.")
+                logger.warning("Resend package not installed; falling back to mock.")
                 self.is_mock = True
         else:
-            logger.info("Email service running in MOCK mode (no SENDGRID_API_KEY).")
+            logger.info("Email service running in MOCK mode (no RESEND_API_KEY).")
 
-    def _send_sync(self, to_email: str, subject: str, html: str) -> int:
-        from sendgrid.helpers.mail import Mail
-        message = Mail(
-            from_email=self.from_email,
-            to_emails=to_email,
-            subject=subject,
-            html_content=html,
-        )
-        response = self.client.send(message)
-        return response.status_code
+    def _send_sync(self, to_email: str, subject: str, html: str) -> str:
+        # Resend's Python SDK is synchronous; the caller wraps this in
+        # asyncio.to_thread so it doesn't block the event loop.
+        result = self._resend.Emails.send({
+            "from": self.from_email,
+            "to": [to_email],
+            "subject": subject,
+            "html": html,
+        })
+        # The SDK returns either a dict {"id": "..."} or a Resend object with .id
+        if isinstance(result, dict):
+            return result.get("id", "")
+        return getattr(result, "id", "")
 
     async def _send(self, to_email: str, subject: str, html: str) -> dict:
         if self.is_mock:
             logger.info("[MOCK EMAIL] To: %s | Subject: %s", to_email, subject)
             return {"success": True, "mock": True, "message_id": f"mock_{uuid.uuid4().hex[:12]}"}
         try:
-            status = await asyncio.to_thread(self._send_sync, to_email, subject, html)
-            return {"success": True, "mock": False, "status_code": status}
+            message_id = await asyncio.to_thread(self._send_sync, to_email, subject, html)
+            return {"success": True, "mock": False, "message_id": message_id}
         except Exception as e:
-            logger.error("SendGrid error: %s", e)
+            logger.error("Resend error sending to %s: %s", to_email, e)
             return {"success": False, "error": str(e)}
 
     async def send_verification_email(self, to_email: str, code: str, user_name: str = "there") -> dict:

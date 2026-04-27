@@ -100,7 +100,7 @@ Extend the existing "DateFirst" app with a robust Safety/Trust layer, geolocatio
 
 ### P0 (Critical)
 - [ ] Real SMS integration (Twilio)
-- [ ] Real email sending (SendGrid)
+- [x] Real email sending (Resend)
 - [ ] WebSocket for real-time chat
 - [ ] Push notifications for check-ins
 

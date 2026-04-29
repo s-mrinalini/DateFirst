@@ -27,7 +27,10 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-PROVIDER = os.environ.get("CSAM_PROVIDER", "none").lower()
+# Default is "" (unset) — production refuses to start uploads. Setting
+# CSAM_PROVIDER=none is an *explicit* opt-out: production will accept it but
+# log a loud warning per upload. Don't deploy that to a public launch.
+PROVIDER = os.environ.get("CSAM_PROVIDER", "").lower()
 ENV = os.environ.get("ENV", "development").lower()
 
 _HIVE_BLOCK_THRESHOLD = float(os.environ.get("CSAM_HIVE_THRESHOLD", "0.7"))
@@ -108,16 +111,28 @@ async def scan_image(content: bytes, *, mime: str, user_id: str) -> ScanResult:
         return ScanResult(blocked=False, score=0.0, provider=f"{PROVIDER}_stub")
 
     if PROVIDER == "none":
-        if ENV == "production":
-            raise RuntimeError(
-                "CSAM_PROVIDER=none is not allowed in production. "
-                "Set CSAM_PROVIDER=hive (or thorn/photodna) and the matching API key."
-            )
+        # Explicit opt-out. Allowed in any env, but each upload still logs
+        # so there's a paper trail. Public launch must switch to hive/thorn/photodna.
         logger.warning(
-            "CSAM scan SKIPPED — CSAM_PROVIDER=none. user_id=%s. "
-            "DEV ONLY. This MUST NOT ship to production.",
-            user_id,
+            "CSAM scan SKIPPED — CSAM_PROVIDER=none (ENV=%s). user_id=%s. "
+            "Acceptable for invite-only beta. DO NOT keep this on for public launch.",
+            ENV, user_id,
         )
         return ScanResult(blocked=False, score=0.0, provider="none")
+
+    if PROVIDER == "":
+        # Unset = misconfiguration. In production we refuse to start uploads;
+        # in dev we pass them through with a warning so local devs don't get blocked.
+        if ENV not in ("development", "dev", "local"):
+            raise RuntimeError(
+                "CSAM_PROVIDER is unset. Set CSAM_PROVIDER=hive (or thorn/photodna) "
+                "with the matching API key for production, or =none to explicitly "
+                "opt out for invite-only beta testing."
+            )
+        logger.warning(
+            "CSAM_PROVIDER unset — passing through (DEV). Set CSAM_PROVIDER=hive "
+            "or =none before deploying."
+        )
+        return ScanResult(blocked=False, score=0.0, provider="unset")
 
     raise RuntimeError(f"Unknown CSAM_PROVIDER: {PROVIDER!r}")

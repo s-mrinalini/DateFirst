@@ -16,6 +16,8 @@ import {
   SheetTrigger,
 } from '../components/ui/sheet';
 import { useAuth } from '../context/AuthContext';
+import ProfileAvatar from '../components/ProfileAvatar';
+import { formatName } from '../lib/displayName';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -305,18 +307,26 @@ export default function DiscoverPage() {
               data-testid={`invite-card-${currentInvite.user_id}`}
             >
               {/* Photo */}
-              <div className="relative aspect-square">
-                <img 
-                  src={currentInvite.main_photo} 
-                  alt={currentInvite.first_name}
-                  className="w-full h-full object-cover"
-                />
+              <div className="relative aspect-square bg-stone-100">
+                {currentInvite.main_photo ? (
+                  <img
+                    src={currentInvite.main_photo}
+                    alt={currentInvite.first_name}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#E76F51] to-[#E9C46A]">
+                    <span className="text-white text-7xl font-bold">
+                      {currentInvite.first_name?.charAt(0).toUpperCase() || '?'}
+                    </span>
+                  </div>
+                )}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-                
-                {/* Name & Location */}
+
+                {/* Name & Location — pre-match: first + last initial */}
                 <div className="absolute bottom-4 left-4 right-4 text-white">
                   <h2 className="text-2xl font-bold" style={{ fontFamily: 'Syne, sans-serif' }}>
-                    {currentInvite.first_name}
+                    {formatName(currentInvite)}
                   </h2>
                   <div className="flex items-center gap-1 text-white/80 text-sm mt-1">
                     <MapPin className="w-4 h-4" />

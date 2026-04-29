@@ -1,6 +1,7 @@
 import React from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { formatName } from '../lib/displayName';
 import { 
   Home, 
   PlusCircle, 
@@ -116,7 +117,7 @@ export const Layout = () => {
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-56">
                       <div className="px-3 py-2">
-                        <p className="font-semibold text-[#1C1917]">{user?.first_name}</p>
+                        <p className="font-semibold text-[#1C1917]">{formatName(user)}</p>
                         <p className="text-sm text-[#57534E]">{user?.email}</p>
                       </div>
                       <DropdownMenuSeparator />
@@ -210,7 +211,7 @@ export const Layout = () => {
                   </AvatarFallback>
                 </Avatar>
                 <div>
-                  <p className="font-semibold">{user?.first_name}</p>
+                  <p className="font-semibold">{formatName(user)}</p>
                   <p className="text-sm text-[#57534E]">{user?.email}</p>
                 </div>
                 {isPremium && <Crown className="w-5 h-5 text-[#E9C46A]" fill="#E9C46A" />}

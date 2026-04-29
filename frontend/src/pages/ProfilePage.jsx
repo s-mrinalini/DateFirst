@@ -64,6 +64,7 @@ export default function ProfilePage() {
   
   const [formData, setFormData] = useState({
     first_name: profile?.first_name || '',
+    last_name: profile?.last_name || '',
     main_photo: profile?.main_photo || '',
     city: profile?.city || '',
     distance_preference: profile?.distance_preference || 50,
@@ -150,17 +151,25 @@ export default function ProfilePage() {
       {/* Profile Card */}
       <div className="bg-white rounded-3xl shadow-lg overflow-hidden mb-6">
         {/* Photo */}
-        <div className="relative aspect-square max-h-80">
-          <img 
-            src={editing ? formData.main_photo : profile?.main_photo}
-            alt={profile?.first_name}
-            className="w-full h-full object-cover"
-          />
+        <div className="relative aspect-square max-h-80 bg-stone-100">
+          {(editing ? formData.main_photo : profile?.main_photo) ? (
+            <img
+              src={editing ? formData.main_photo : profile?.main_photo}
+              alt={profile?.first_name}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#E76F51] to-[#E9C46A]">
+              <span className="text-white text-7xl font-bold">
+                {profile?.first_name?.charAt(0).toUpperCase() || '?'}
+              </span>
+            </div>
+          )}
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-          
+
           <div className="absolute bottom-4 left-4 text-white">
             <h2 className="text-2xl font-bold" style={{ fontFamily: 'Syne, sans-serif' }}>
-              {profile?.first_name}{age && `, ${age}`}
+              {[profile?.first_name, profile?.last_name].filter(Boolean).join(' ')}{age && `, ${age}`}
             </h2>
             <div className="flex items-center gap-1 text-white/80 mt-1">
               <MapPin className="w-4 h-4" />
@@ -182,10 +191,18 @@ export default function ProfilePage() {
           {editing ? (
             <div className="space-y-4">
               <div>
-                <Label>Name</Label>
+                <Label>First name</Label>
                 <Input
                   value={formData.first_name}
                   onChange={(e) => updateField('first_name', e.target.value)}
+                  className="mt-1 rounded-xl"
+                />
+              </div>
+              <div>
+                <Label>Last name</Label>
+                <Input
+                  value={formData.last_name}
+                  onChange={(e) => updateField('last_name', e.target.value)}
                   className="mt-1 rounded-xl"
                 />
               </div>

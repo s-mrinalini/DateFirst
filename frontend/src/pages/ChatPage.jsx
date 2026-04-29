@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'sonner';
+import { formatName } from '../lib/displayName';
 import { format, parseISO } from 'date-fns';
 import { 
   ArrowLeft, Send, MoreVertical, Flag, Ban, Calendar, MapPin,
@@ -280,7 +281,7 @@ export default function ChatPage() {
         </Avatar>
 
         <div className="flex-1 min-w-0">
-          <h2 className="font-bold text-[#1C1917]">{otherUser.first_name}</h2>
+          <h2 className="font-bold text-[#1C1917]">{formatName(otherUser)}</h2>
           <p className="text-xs text-[#57534E] truncate">
             {thread.matched_on_idea?.title}
           </p>
@@ -400,7 +401,7 @@ export default function ChatPage() {
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.length === 0 ? (
           <div className="text-center py-8 text-[#A8A29E]">
-            Say hi to {otherUser.first_name}!
+            Say hi to {otherUser.first_name || 'them'}!
           </div>
         ) : (
           messages.map((msg) => {

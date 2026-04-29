@@ -142,7 +142,7 @@ export default function SettingsPage() {
                 key={user.user_id}
                 className="p-4 flex items-center justify-between"
               >
-                <span className="font-medium">{user.first_name}</span>
+                <span className="font-medium">{user.first_name}{user.last_initial ? ` ${user.last_initial}` : ''}</span>
                 <Button
                   variant="ghost"
                   size="sm"

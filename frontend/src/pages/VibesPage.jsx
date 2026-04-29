@@ -4,6 +4,7 @@ import axios from 'axios';
 import { toast } from 'sonner';
 import { Heart, MapPin, X, Check, Sparkles } from 'lucide-react';
 import { Button } from '../components/ui/button';
+import { formatName } from '../lib/displayName';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -86,15 +87,23 @@ export default function VibesPage() {
               style={{ animationDelay: `${idx * 0.05}s` }}
               data-testid={`vibe-${vibe.user_id}`}
             >
-              <div className="relative aspect-square">
-                <img 
-                  src={vibe.main_photo} 
-                  alt={vibe.first_name}
-                  className="w-full h-full object-cover"
-                />
+              <div className="relative aspect-square bg-stone-100">
+                {vibe.main_photo ? (
+                  <img
+                    src={vibe.main_photo}
+                    alt={vibe.first_name}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#E76F51] to-[#E9C46A]">
+                    <span className="text-white text-5xl font-bold">
+                      {vibe.first_name?.charAt(0).toUpperCase() || '?'}
+                    </span>
+                  </div>
+                )}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
                 <div className="absolute bottom-2 left-2 text-white">
-                  <p className="font-bold">{vibe.first_name}</p>
+                  <p className="font-bold">{formatName(vibe)}</p>
                   <div className="flex items-center gap-1 text-xs text-white/80">
                     <MapPin className="w-3 h-3" />
                     <span>{vibe.city}</span>

@@ -52,6 +52,7 @@ export default function OnboardingPage() {
 
   const [formData, setFormData] = useState({
     first_name: '',
+    last_name: '',
     main_photo: '',
     city: '',
     distance_preference: 25,
@@ -175,9 +176,10 @@ export default function OnboardingPage() {
   const validateStep = () => {
     switch (step) {
       case 1:
-        if (!formData.first_name.trim()) { toast.error('Enter your name'); return false; }
-        if (!formData.main_photo.trim()) { toast.error('Add your photo'); return false; }
+        if (!formData.first_name.trim()) { toast.error('Enter your first name'); return false; }
+        if (!formData.last_name.trim()) { toast.error('Enter your last name'); return false; }
         if (photoUploading) { toast.error('Photo is still uploading'); return false; }
+        // main_photo is optional — users can skip and add a photo later in Settings.
         return true;
       case 2:
         if (!formData.city.trim()) { toast.error('Enter your city'); return false; }
@@ -325,22 +327,36 @@ export default function OnboardingPage() {
                 <h2 className="text-2xl font-bold text-[#1C1917]" style={{ fontFamily: 'Syne, sans-serif' }}>
                   Let's start with you
                 </h2>
-                <p className="text-[#57534E] mt-2">Your first name and photo</p>
+                <p className="text-[#57534E] mt-2">Your name and photo</p>
               </div>
-              
+
               <div>
-                <Label>First Name</Label>
+                <Label>First name</Label>
                 <Input
                   placeholder="Your first name"
                   value={formData.first_name}
                   onChange={(e) => updateField('first_name', e.target.value)}
                   className="mt-1.5 rounded-xl h-12"
-                  data-testid="onboard-name"
+                  data-testid="onboard-first-name"
                 />
               </div>
-              
+
               <div>
-                <Label>Profile Photo</Label>
+                <Label>Last name</Label>
+                <Input
+                  placeholder="Your last name"
+                  value={formData.last_name}
+                  onChange={(e) => updateField('last_name', e.target.value)}
+                  className="mt-1.5 rounded-xl h-12"
+                  data-testid="onboard-last-name"
+                />
+                <p className="text-xs text-[#A8A29E] mt-1">
+                  Only your first name and last initial are shown before a match.
+                </p>
+              </div>
+
+              <div>
+                <Label>Profile photo <span className="text-[#A8A29E] font-normal">(optional)</span></Label>
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -383,6 +399,16 @@ export default function OnboardingPage() {
                         ? 'Replace photo'
                         : 'Choose photo'}
                   </Button>
+                  {!formData.main_photo && !photoUploading && (
+                    <button
+                      type="button"
+                      onClick={() => updateField('main_photo', '')}
+                      className="text-sm text-[#57534E] hover:text-[#E76F51] underline"
+                      data-testid="onboard-photo-skip"
+                    >
+                      Skip for now — add a photo later in Settings
+                    </button>
+                  )}
                   <p className="text-xs text-[#A8A29E]">JPEG, PNG, or WebP — up to 5MB</p>
                 </div>
               </div>

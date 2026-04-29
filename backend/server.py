@@ -241,7 +241,8 @@ class FirstDateIdea(BaseModel):
 
 class ProfileSetup(BaseModel):
     first_name: str
-    main_photo: str
+    last_name: str
+    main_photo: Optional[str] = ""  # Optional — users can skip and add later
     city: str
     distance_preference: int = 50
     date_of_birth: str  # ISO date string YYYY-MM-DD
@@ -271,6 +272,7 @@ class ProfileSetup(BaseModel):
 
 class ProfileUpdate(BaseModel):
     first_name: Optional[str] = None
+    last_name: Optional[str] = None
     main_photo: Optional[str] = None
     city: Optional[str] = None
     distance_preference: Optional[int] = None
@@ -488,10 +490,13 @@ async def are_matched(user1_id: str, user2_id: str) -> bool:
     return match is not None
 
 def get_public_profile(profile: dict, user: dict = None) -> dict:
-    """Return only pre-match visible fields + verification badges"""
+    """Pre-match shape — full first name + last initial only, never the full surname."""
+    last_name = profile.get("last_name") or ""
+    last_initial = (last_name.strip()[:1] + ".") if last_name.strip() else ""
     result = {
         "user_id": profile.get("user_id"),
         "first_name": profile.get("first_name"),
+        "last_initial": last_initial,
         "main_photo": profile.get("main_photo"),
         "city": profile.get("city"),
         "first_date_idea": profile.get("first_date_idea"),
@@ -503,10 +508,11 @@ def get_public_profile(profile: dict, user: dict = None) -> dict:
     return result
 
 def get_full_profile(profile: dict, user: dict = None) -> dict:
-    """Return full profile for matched users"""
+    """Post-match shape — full first + last name."""
     result = {
         "user_id": profile.get("user_id"),
         "first_name": profile.get("first_name"),
+        "last_name": profile.get("last_name"),
         "main_photo": profile.get("main_photo"),
         "city": profile.get("city"),
         "distance_preference": profile.get("distance_preference"),
@@ -917,7 +923,8 @@ async def setup_profile(data: ProfileSetup, current_user: dict = Depends(get_cur
         "id": str(uuid.uuid4()),
         "user_id": current_user['id'],
         "first_name": data.first_name,
-        "main_photo": data.main_photo,
+        "last_name": data.last_name,
+        "main_photo": data.main_photo or "",
         "city": data.city,
         "distance_preference": data.distance_preference,
         "date_of_birth": data.date_of_birth,
@@ -1531,23 +1538,40 @@ async def _process_image_upload(raw: bytes, user_id: str) -> Dict[str, Any]:
     Pipeline for any user-uploaded image:
       1) magic-byte sniff + Pillow verify
       2) re-encode to JPEG (strips EXIF/GPS, caps dimensions)
-      3) CSAM scan (fail-closed in production)
+      3) CSAM scan (fail-closed in production unless CSAM_PROVIDER=none)
       4) upload to S3/local
-    Returns the storage result. Raises HTTPException on rejection.
+    Each failure mode logs context so failures are diagnosable in deploy logs.
     """
+    logger.info(
+        "upload start: user_id=%s size=%d storage=%s upload_dir=%s",
+        user_id, len(raw),
+        "s3" if not file_storage.is_mock else "local",
+        file_storage.local_dir,
+    )
+
     if len(raw) > MAX_UPLOAD_BYTES:
+        logger.warning("upload reject: oversize size=%d max=%d user_id=%s",
+                       len(raw), MAX_UPLOAD_BYTES, user_id)
         raise HTTPException(status_code=413, detail=f"File too large. Max {MAX_UPLOAD_BYTES // (1024 * 1024)} MB.")
 
     try:
-        normalized, mime, _ = validate_and_normalize_image(
+        normalized, mime, dims = validate_and_normalize_image(
             raw, allowed_mimes=ALLOWED_IMAGE_MIMES, max_dim=MAX_IMAGE_DIMENSION
         )
+        logger.info("upload normalized: user_id=%s mime=%s dims=%s out_size=%d",
+                    user_id, mime, dims, len(normalized))
     except ValueError as e:
+        logger.warning("upload reject: validation user_id=%s reason=%s", user_id, e)
         raise HTTPException(status_code=400, detail=str(e))
 
-    scan = await csam_scan_image(normalized, mime=mime, user_id=user_id)
+    try:
+        scan = await csam_scan_image(normalized, mime=mime, user_id=user_id)
+    except RuntimeError as e:
+        # csam_scanner raises when misconfigured (e.g. CSAM_PROVIDER unset in prod).
+        logger.error("upload reject: scanner_misconfig user_id=%s reason=%s", user_id, e)
+        raise HTTPException(status_code=503, detail="Upload temporarily unavailable.")
+
     if scan.blocked:
-        # Auto-suspend the account; never store the bytes.
         await db.users.update_one({"id": user_id}, {"$set": {"status": "suspended"}})
         await db.moderation_actions.insert_one({
             "id": str(uuid.uuid4()),
@@ -1560,9 +1584,19 @@ async def _process_image_upload(raw: bytes, user_id: str) -> Dict[str, Any]:
         logger.error("CSAM block: user_id=%s provider=%s score=%s", user_id, scan.provider, scan.score)
         raise HTTPException(status_code=451, detail="Upload rejected by safety scan.")
 
-    result = await file_storage.upload_file(normalized, "upload.jpg", "image/jpeg")
+    try:
+        result = await file_storage.upload_file(normalized, "upload.jpg", "image/jpeg")
+    except Exception as e:
+        # Catches anything boto3/aiofiles raises that wasn't already caught.
+        logger.exception("upload reject: storage_exception user_id=%s", user_id)
+        raise HTTPException(status_code=500, detail=f"Storage error: {e}")
+
     if not result.get("success"):
-        raise HTTPException(status_code=500, detail=result.get("error", "Upload failed"))
+        err = result.get("error", "Upload failed")
+        logger.error("upload reject: storage_failure user_id=%s reason=%s", user_id, err)
+        raise HTTPException(status_code=500, detail=err)
+
+    logger.info("upload ok: user_id=%s url=%s", user_id, result.get("url", "")[:80])
     return result
 
 
